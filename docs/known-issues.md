@@ -19,7 +19,7 @@ Severity is about the rep's experience: **High** blocks a task or shows a wrong 
 
 ### KI-001. A quantity above 2,147,483,647 fails the save with a 500
 
-**Status:** Fixed in the API (`fix-quote-quantity-cap`); the review screen still needs the same cap (T4). **Severity:** Medium. **Found in:** T5, PR #5.
+**Status:** Fixed in the API (PR #9); the review screen still needs the same cap (T4). **Severity:** Medium. **Found in:** T5, PR #5.
 
 `SaveQuoteRequest.lines[].quantity` had no upper bound, but `quote_line.quantity` is a Postgres `integer`.
 A larger quantity passed validation, then the insert failed and `POST /api/quotes` answered 500 with no body, on every retry.
