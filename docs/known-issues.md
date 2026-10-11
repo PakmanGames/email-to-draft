@@ -14,6 +14,11 @@ Severity is about the rep's experience: **High** blocks a task or shows a wrong 
 | [KI-004](#ki-004-an-unknown-draft-url-returns-http-200) | An unknown draft URL returns HTTP 200 | T5 | Low | Accepted |
 | [KI-005](#ki-005-saved-times-are-blank-until-the-page-hydrates) | Saved times are blank until the page hydrates | T5 | Low | Accepted |
 | [KI-006](#ki-006-no-automated-test-renders-the-quote-pages-from-the-database) | No automated test renders the quote pages from the database | T5, T7 | Low | Open |
+| [KI-007](#ki-007-description-candidates-can-all-share-one-description) | Description candidates can all share one description | T3 | Medium | Open |
+| [KI-008](#ki-008-extra-words-in-a-description-can-make-a-part-we-carry-show-as-not-in-inventory) | Extra words in a description can make a part we carry show as Not in inventory | T2, T3 | Medium | Open |
+| [KI-009](#ki-009-low-lines-have-no-default-supplier-for-their-candidates) | Low lines have no default supplier for their candidates | Contracts, T3, T4 | Medium | Open |
+| [KI-010](#ki-010-technical-design-section-7-doesnt-describe-three-matching-choices) | Technical design section 7 doesn't describe three matching choices | Docs, T3 | Low | Open |
+| [KI-011](#ki-011-the-500-ms-matching-budget-is-checked-by-hand) | The 500 ms matching budget is checked by hand | T3, T7 | Low | Open |
 
 ---
 
@@ -82,3 +87,62 @@ Component tests cover the views with data in the shape the queries return, and t
 No automated test loads `/quotes` or `/quotes/[quoteId]` from a real database, because `e2e/` belongs to T7.
 
 **Proposed fix:** T7's Playwright suite should seed a draft with a short-stock line and assert both pages show the warning.
+
+### KI-007. Description candidates can all share one description
+
+**Status:** Open. **Severity:** Medium. **Found in:** T3, PR #8.
+
+Only 558 descriptions cover the 12,000 parts, about 21 parts each.
+The description rule returns the top 5 parts, so all five slots often hold the same description.
+For "AS568-214 o-rings" in sample email 12, all five candidates are "GASKET AS568-214", and "PACKING,PREFORMED AS568-214" (the actual o-ring) only turns up with a search.
+For the hose line in the same email, the repeats help: all five candidates are the right -6 x 24 size.
+
+**Proposed fix:** decide in T7, with the full email set, whether to show one part per description (or at most two), and which part to show for each, for example the one whose offers best fill the quantity.
+
+### KI-008. Extra words in a description can make a part we carry show as Not in inventory
+
+**Status:** Open. **Severity:** Medium. **Found in:** T3, PR #8.
+
+The description rule scores how much of the customer's text appears in our description, so words that aren't about the part pull the score down.
+"-6 hose assemblies, 24 inch" scores 0.51 and finds the right hoses, but "-6 hose assemblies, 24 inch, same as last order" scores 0.36, below the 0.40 threshold, and the line shows "Not in inventory".
+Whether it happens depends on what the model puts in `description`.
+The rep can still find the part with the search box, but "Not in inventory" is routine, neutral styling, so nothing prompts them to look.
+
+**Proposed fix:** either a prompt rule in T2 that `description` holds only what describes the item, or also score the reverse direction (how much of our description appears in the customer's text) and take the higher score.
+Measure either one against the sample emails before choosing.
+
+### KI-009. Low lines have no default supplier for their candidates
+
+**Status:** Open. **Severity:** Medium. **Found in:** T3, PR #8.
+
+`LineMatch` has one `defaultSupplier`, and matching sets it only for High lines, because a Low line has no chosen part yet.
+When the rep picks a candidate on a Low line, the review screen has to choose a supplier itself, or the line stays unpriced until the rep picks one.
+Likewise, when the rep changes the quantity on a High line, the default supplier and its reason ("Cheapest supplier that can fill 10") no longer match the new quantity.
+`pickDefaultSupplier(offers, quantityEach)` in `src/lib/matching/default-supplier.ts` is the same rule, pure and safe to import in client components.
+
+**Proposed fix:** T4 calls `pickDefaultSupplier` when the rep picks a candidate or changes the quantity, unless the rep already chose a supplier.
+The alternative is a default supplier on each `Candidate`, which is a contract change and still goes stale when the quantity changes.
+
+### KI-010. Technical design section 7 doesn't describe three matching choices
+
+**Status:** Open. **Severity:** Low. **Found in:** T3, PR #8.
+
+1. Descriptions are compared with `strict_word_similarity`, not `word_similarity`. The plain version matches across word boundaries: "o-ring" scored 0.57 against "BEARING,ROLLER", and "resistor 4.7k" ranked TRANSISTOR first.
+2. When a line has a description, the description rule searches with the part number in front of it, so spec numbers like "AS568-214", which only appear in our descriptions, find parts. A part number alone is never searched against descriptions, because a short one like "QQ-1" scores 0.40 against any "1/2-20" description.
+3. When a part number and a shared NSN together point to exactly one part, the line is High. An NSN alone that covers several parts is still Low.
+
+The final thresholds also differ from the starting values in section 7: part number fuzzy 0.40 and description contradiction 0.30.
+`src/lib/matching/thresholds.ts` gives the measurements behind each.
+
+**Proposed fix:** update section 7 when PR #8 merges.
+
+### KI-011. The 500 ms matching budget is checked by hand
+
+**Status:** Open. **Severity:** Low. **Found in:** T3, PR #8.
+
+The budget was checked by hand on the shared dev database: 30 description-only lines, the worst case, took about 197 ms, and 30 exact lines took about 2 ms.
+No automated test checks it, because the full inventory isn't in git.
+Production runs Postgres 18 on Railway, where the timing hasn't been measured.
+If it's slower, scoring the 558 distinct descriptions once instead of all 12,000 parts measured 84 ms for the same worst case.
+
+**Proposed fix:** T7 times `matchLines` in `pnpm eval:emails` or on the deployed app.
