@@ -25,6 +25,9 @@ const copy: Record<ExtractionErrorCode, { title: string; detail: string | null }
   SCHEMA_MISMATCH: { title: unreadable, detail: "It didn't match the expected format, even after a repair attempt." },
   TRUNCATED: { title: unreadable, detail: "It was cut off before the end." },
   CANCELLED: { title: "Extraction cancelled.", detail: null },
+  // A 500 past the model (KI-012). It usually still carries an extraction ID, so the rep can
+  // continue manually with the email that was recorded.
+  INTERNAL_ERROR: { title: "Something went wrong on the server.", detail: "It failed after the model answered." },
 };
 
 export function describeFailure(outcome: Exclude<ExtractOutcome, { kind: "ok" }>): Failure {

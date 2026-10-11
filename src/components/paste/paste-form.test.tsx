@@ -127,6 +127,7 @@ describe("results", () => {
     ["PROVIDER_ERROR", "The model provider returned an error."],
     ["MODEL_UNAVAILABLE", "The model is unavailable right now."],
     ["CANCELLED", "Extraction cancelled."],
+    ["INTERNAL_ERROR", "Something went wrong on the server."],
   ])("shows %s with Retry and Continue manually", async (code, title) => {
     fetchMock.mockResolvedValueOnce(failure(code));
     const user = await pasteAndExtract();
@@ -166,6 +167,20 @@ describe("results", () => {
     expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: /Continue manually/ })).toBeNull();
     expect(push).not.toHaveBeenCalled();
+  });
+
+  it("offers only Retry for an INTERNAL_ERROR that recorded nothing", async () => {
+    fetchMock.mockResolvedValueOnce(
+      json(500, {
+        ok: false,
+        extractionId: null,
+        error: { code: "INTERNAL_ERROR", message: "x", retryable: true, retryAfterSeconds: null },
+      }),
+    );
+    await pasteAndExtract();
+    expect(screen.getByRole("alert").textContent).toContain("Something went wrong on the server.");
+    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /Continue manually/ })).toBeNull();
   });
 
   it("does not offer Retry when the server says retrying won't help", async () => {
