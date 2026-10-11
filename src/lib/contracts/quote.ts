@@ -4,6 +4,13 @@ import { Confidence } from "./matching";
 export const LineOrigin = z.enum(["extracted", "manual"]);
 export type LineOrigin = z.infer<typeof LineOrigin>;
 
+/**
+ * Largest quantity one draft line can hold, because `quote_line.quantity` is a Postgres
+ * `integer`. Neither extraction nor the rep is otherwise bounded, so without this cap an
+ * injected or misread quantity would fail the save with a 500 on every retry.
+ */
+export const MAX_LINE_QUANTITY = 2_147_483_647;
+
 // Technical design 5.6: body of POST /api/quotes and the input to `saveQuote`.
 export const SaveQuoteRequest = z.strictObject({
   extractionId: z.uuid(), // one draft per extraction
@@ -14,7 +21,7 @@ export const SaveQuoteRequest = z.strictObject({
         origin: LineOrigin,
         edited: z.boolean(),
         requestedText: z.string().min(1).max(2000),
-        quantity: z.number().int().positive(),
+        quantity: z.number().int().positive().max(MAX_LINE_QUANTITY),
         matchConfidence: Confidence.nullable(),
         matchReason: z.string().nullable(),
         suggestedPartNumber: z.string().nullable(), // what matching preselected, for metric G4

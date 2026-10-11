@@ -8,7 +8,7 @@ Severity is about the rep's experience: **High** blocks a task or shows a wrong 
 
 | ID | Title | Area | Severity | Status |
 | --- | --- | --- | --- | --- |
-| [KI-001](#ki-001-a-quantity-above-2147483647-fails-the-save-with-a-500) | A quantity above 2,147,483,647 fails the save with a 500 | Contracts, T4, T5 | Medium | Open |
+| [KI-001](#ki-001-a-quantity-above-2147483647-fails-the-save-with-a-500) | A quantity above 2,147,483,647 fails the save with a 500 | Contracts, T4, T5 | Medium | Fixed |
 | [KI-002](#ki-002-two-save-rules-live-outside-the-contracts) | Two save rules live outside the contracts | Contracts, T5 | Medium | Open |
 | [KI-003](#ki-003-offer_missing-wins-over-already_saved-on-a-retry) | `OFFER_MISSING` wins over `ALREADY_SAVED` on a retry | T5 | Low | Open |
 | [KI-004](#ki-004-an-unknown-draft-url-returns-http-200) | An unknown draft URL returns HTTP 200 | T5 | Low | Accepted |
@@ -24,15 +24,18 @@ Severity is about the rep's experience: **High** blocks a task or shows a wrong 
 
 ### KI-001. A quantity above 2,147,483,647 fails the save with a 500
 
-**Status:** Open. **Severity:** Medium. **Found in:** T5, PR #5.
+**Status:** Fixed in the API (PR #9); the review screen still needs the same cap (T4). **Severity:** Medium. **Found in:** T5, PR #5.
 
-`SaveQuoteRequest.lines[].quantity` has no upper bound, but `quote_line.quantity` is a Postgres `integer`.
-A larger quantity passes validation, then the insert fails and `POST /api/quotes` answers 500.
-Per PRD section 6 the review screen shows "Couldn't save" with Retry, and Retry fails the same way until the rep lowers the quantity.
-Very large quantities across many lines could also push `total_cents` past `Number.MAX_SAFE_INTEGER`.
+`SaveQuoteRequest.lines[].quantity` had no upper bound, but `quote_line.quantity` is a Postgres `integer`.
+A larger quantity passed validation, then the insert failed and `POST /api/quotes` answered 500 with no body, on every retry.
+Extraction doesn't bound quantities either, so an injected "qty 99999999999" or a misread PO number could reach Save this way.
 
-**Proposed fix:** add `.max(2_147_483_647)` (or a lower business cap) to `quantity` in `src/lib/contracts/quote.ts`, so the API answers 400, and cap the quantity input on the review screen to match.
-This is a contract change, so it needs the contracts owner.
+**Fix:** `MAX_LINE_QUANTITY` (2,147,483,647) in `src/lib/contracts/quote.ts` caps `quantity`, so the API answers 400 with an error that names the line, like `lines[1].quantity`.
+
+**Still open for T4:** the review screen's save gate (REV-6) should treat a quantity above `MAX_LINE_QUANTITY` like a quantity of 0, so the rep sees which line to fix before saving.
+
+**Not fixed:** at the 1000% markup cap, a line at the maximum quantity of a part costing more than about $3,800 can push `total_cents` past `Number.MAX_SAFE_INTEGER`, so the stored total could be off by a few cents.
+The draft would already show a total in the hundreds of trillions of dollars, so this is left as is.
 
 ### KI-002. Two save rules live outside the contracts
 
