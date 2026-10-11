@@ -351,18 +351,18 @@ export function getQuote(id: string): Promise<QuoteDetail | null>;
 
 ## 6. Extraction pipeline (T2)
 
-1. Validate input with zod: trimmed, non-empty, at most 20,000 characters.
+1. Validate input with zod: trimmed, non-empty, at most 20,000 characters. A body that isn't `{ emailText: string }` carries no email, so it is `EMPTY_INPUT` too.
 2. Insert the `extraction` row as `pending`.
 3. Call the model with a 20-second per-attempt timeout and an overall 28-second budget, so the server answers before the client's 30-second limit. Pass `request.signal` through so Cancel aborts the model call.
 4. Request settings: `response_format: { type: "json_schema", json_schema: { name: "rfq_extraction", strict: true, schema } }`, `reasoning_effort: "low"`, `temperature: 0` (reduces run-to-run variation but does not remove it), and a `max_completion_tokens` cap. `finish_reason === "length"` is treated as `TRUNCATED`.
 5. `JSON.parse`, then `LlmExtraction.safeParse` with refinements.
-6. On `INVALID_JSON`, `SCHEMA_MISMATCH`, `TRUNCATED`, `PROVIDER_ERROR` (5xx or network), retry once if the budget allows. A repair retry includes a short summary of the validation issues. `RATE_LIMITED` and `TIMEOUT` are not retried automatically.
+6. On `INVALID_JSON`, `SCHEMA_MISMATCH`, `TRUNCATED`, `PROVIDER_ERROR` (5xx or network), retry once if at least 5 seconds of the budget are left. A repair retry includes a short summary of the validation issues. `RATE_LIMITED` and `TIMEOUT` are not retried automatically, and neither is any other 4xx, which the provider would only reject again. A 404 is `MODEL_UNAVAILABLE`.
 7. Post-process each line:
    - **Grounding.** Normalize the email and each identifier to `[A-Z0-9]` and check that the identifier is a substring. Drop ungrounded identifiers with `IDENTIFIER_DROPPED`. Discard a line whose part number, NSN, and description are all missing after grounding, and add a `LINES_DISCARDED` notice. Then check each line against its own text: if `source_text` is not in the email (whitespace-normalized), or a kept identifier is not inside `source_text`, add `LINE_NOT_GROUNDED`. This catches the model attaching one line's part number to another line's quantity. Matching caps such lines at Low, and the review screen asks the rep to confirm their quantity.
    - **NSN.** `normalizeNsn` accepts 13 digits with any separators and an optional "NSN" prefix. Anything else gets `NSN_INVALID` and becomes null.
-   - **Units.** A fixed table: each, ea, pc, pcs, blank = 1; dz, doz, dozen = 12; hd, hundred = 100. Box, pack, pkg, pg use `pack_size` when the email states it. Otherwise `quantityEach` is null with `UNIT_UNKNOWN`. Converted lines get an informational `UNIT_CONVERTED` warning.
-   - **Quantity grounding.** If the quantity number (commas removed) is not found in `source_text`, add `QTY_NOT_IN_TEXT`. The check also accepts small number words ("a", "one" to "twelve") so "a dozen" (quantity 1, unit dozen) is not flagged.
-8. Run `matchLines`, build the `ReviewSeed`, and update the row with `status`, `result`, `attempts`, and `duration_ms`.
+   - **Units.** A fixed table, ignoring case and a trailing period: each, ea, pc, pcs, piece, pieces, blank = 1; dz, doz, dozen, dozens = 12; hd, hundred, hundreds = 100. Box, pack, pkg, pg (and boxes, bx, packs, pk, pkgs, package, packages) use `pack_size` when the email states it. Otherwise `quantityEach` is null with `UNIT_UNKNOWN`. Converted lines get an informational `UNIT_CONVERTED` warning.
+   - **Quantity grounding.** If the quantity number (commas removed) is not found in `source_text`, add `QTY_NOT_IN_TEXT`. The same goes for `pack_size`, since it multiplies the quantity. The part number and NSN are blanked out of the text first, so a digit inside one can't vouch for an invented quantity. The check also accepts small number words ("a", "one" to "twelve") so "a dozen" (quantity 1, unit dozen) is not flagged.
+8. Run `matchLines`, build the `ReviewSeed`, and update the row with `status`, `result`, `attempts`, and `duration_ms`. A failed extraction stores its `error_code` and a seed with zero lines and an `EXTRACTION_FAILED` notice, so the review page renders it like any other.
 
 **Prompt rules** (versioned as `PROMPT_VERSION = "extract-v1"`):
 
@@ -382,6 +382,7 @@ export function getQuote(id: string): Promise<QuoteDetail | null>;
 - "a dozen" came back as a null quantity and unit, which led to the word-quantity prompt rule above.
 - Sample email 03 (forwarded chain), run twice at `temperature: 0`: identical output both times, the updated quantities were used, and the withdrawn item was left out. `superseded_note` stayed null, so the prompt needs a clearer instruction for it.
 - Rate limit headers report 1,000 requests per day and 8,000 tokens per minute. At about 1.2K tokens per 5-line email, a 30-line email should cost about 4K tokens, so at most two big emails per minute.
+- Follow-up with the `extract-v1` prompt (T2 manual runs): "a dozen" comes back as quantity 1, unit "dozen", and email 03 sets `superseded_note`. Groq also accepts the schema exactly as `z.toJSONSchema()` emits it (type arrays, `$schema`, and `maxItems`), and the tokens-per-minute counter drops by actual usage, not by the `max_completion_tokens` cap.
 
 **Fault injection (FAIL-6, P1).** When `FAULT_INJECTION=1`, the paste page shows a selector, and the route swaps in a `FakeLlmClient` returning one of: malformed JSON, a schema violation, a hallucinated part number, a hang until timeout, or a 429.
 The same fake is used by unit and E2E tests.
