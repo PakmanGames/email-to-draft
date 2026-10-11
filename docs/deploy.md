@@ -82,14 +82,18 @@ It needs two records in the Cloudflare `apak.ca` zone:
 
 | Type | Name | Content | Proxy |
 | --- | --- | --- | --- |
-| CNAME | `email-to-draft` | `e9yu1qne.up.railway.app` | DNS only |
+| CNAME | `email-to-draft` | `e9yu1qne.up.railway.app` | Proxied |
 | TXT | `_railway-verify.email-to-draft` | `railway-verify=8323746ce703f0393a3cd2df8ec2482be2048da48276f547cd9eb56a13aaee21` | |
 
-With DNS only, Railway issues and renews the TLS certificate itself.
-If the CNAME is ever proxied (orange cloud), the zone's SSL/TLS mode must be **Full**, not Flexible, or requests loop.
+The record started as DNS only so Railway could issue its Let's Encrypt certificate, and was then switched to proxied to match the zone's other subdomains.
+Browsers now get Cloudflare's `*.apak.ca` certificate, and Cloudflare connects to Railway over HTTPS, which works because the zone's SSL/TLS mode is Full.
+Never set it to Flexible: Cloudflare would call Railway over plain HTTP and Railway would redirect back to HTTPS, so requests loop.
+Railway keeps renewing its own certificate through the proxy, so the origin connection stays valid.
 Check progress with `railway domain status email-to-draft.apak.ca --service web`.
 The records were added on 2026-10-11, and Railway issued a Let's Encrypt certificate within minutes. Railway renews it automatically.
-Browsers that loaded the domain before the certificate existed can keep showing "Not Secure" on that tab until it is reopened.
+A browser that connected before the certificate existed can keep showing "Not Secure", even in new tabs, because Chrome reuses that HTTPS connection.
+A response header of `server: railway-hikari` instead of `server: cloudflare` gives it away.
+Fix it with `chrome://net-internals/#sockets`, then **Flush socket pools**, or by quitting Chrome completely.
 
 ## Logs
 
