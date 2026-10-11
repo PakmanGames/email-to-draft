@@ -1,10 +1,21 @@
+import { z } from "zod";
 import { SaveQuoteConflict, SaveQuoteResponse, type SaveQuoteRequest } from "@/lib/contracts";
+
+/**
+ * The 400 (invalid body) and 404 (unknown extraction) bodies of POST /api/quotes. Not in the
+ * contracts yet (KI-002), so it is described here.
+ */
+const SaveQuoteError = z.object({ error: z.string() });
 
 export type SaveOutcome =
   | { kind: "created"; quoteId: string }
   | { kind: "alreadySaved"; quoteId: string }
   /** 0-based positions of lines whose offer is gone from inventory. */
   | { kind: "offerMissing"; linePositions: number[] }
+  /** 400: the server rejected the body. Sending it again gets the same answer. */
+  | { kind: "rejected"; message: string }
+  /** 404: the extraction is gone, so this review can never be saved. */
+  | { kind: "extractionMissing" }
   /** Anything else: network failure, server error, or a body that breaks the contract. */
   | { kind: "failed"; httpStatus: number | null };
 
@@ -34,6 +45,11 @@ export async function postQuote(request: SaveQuoteRequest): Promise<SaveOutcome>
       return conflict.data.code === "ALREADY_SAVED"
         ? { kind: "alreadySaved", quoteId: conflict.data.quoteId }
         : { kind: "offerMissing", linePositions: conflict.data.linePositions };
+    }
+  } else if (res.status === 400 || res.status === 404) {
+    const error = SaveQuoteError.safeParse(body);
+    if (error.success) {
+      return res.status === 400 ? { kind: "rejected", message: error.data.error } : { kind: "extractionMissing" };
     }
   }
   return { kind: "failed", httpStatus: res.status };

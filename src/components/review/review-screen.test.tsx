@@ -114,6 +114,10 @@ describe("save gate", () => {
     await resolveMixed(user);
     await user.clear(screen.getByLabelText("Quantity for line 1"));
     expect(screen.getByText("To save: 1 line needs a quantity.")).toBeTruthy();
+    // Above MAX_LINE_QUANTITY, the server can't store it, so it blocks like an empty one (KI-001).
+    await user.type(screen.getByLabelText("Quantity for line 1"), "2147483648");
+    expect(screen.getByText("To save: 1 line needs a quantity.")).toBeTruthy();
+    await user.clear(screen.getByLabelText("Quantity for line 1"));
     await user.type(screen.getByLabelText("Quantity for line 1"), "40");
 
     await user.clear(screen.getByRole("textbox", { name: "Markup" }));
@@ -242,6 +246,31 @@ describe("saving", () => {
     fetchMock.mockResolvedValueOnce(json(201, { quoteId }));
     await user.click(screen.getByRole("button", { name: "Retry save" }));
     expect(push).toHaveBeenCalledWith(`/quotes/${quoteId}`);
+  });
+
+  it("says the server rejected the draft on a 400, without offering a pointless retry", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    fetchMock.mockResolvedValue(json(400, { error: "✖ Too big\n  → at lines[1].quantity" }));
+    const user = renderMixed();
+    await resolveMixed(user);
+    await user.click(saveButton());
+
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Couldn't save: the server rejected this draft. Your edits are still here.",
+    );
+    expect(screen.getByRole("button", { name: "Save draft" })).toHaveProperty("disabled", false);
+    expect(consoleError).toHaveBeenCalledWith(expect.stringContaining("rejected"), expect.stringContaining("lines[1]"));
+  });
+
+  it("stops saving and points to a fresh paste when the extraction is gone (404)", async () => {
+    fetchMock.mockResolvedValue(json(404, { error: "Extraction not found" }));
+    const user = renderMixed();
+    await resolveMixed(user);
+    await user.click(saveButton());
+
+    expect((await screen.findByRole("alert")).textContent).toContain("this extraction no longer exists");
+    expect(screen.getByRole("link", { name: "Paste the email again" }).getAttribute("href")).toBe("/");
+    expect(saveButton()).toHaveProperty("disabled", true);
   });
 
   it("names the lines whose offer is gone", async () => {

@@ -40,6 +40,8 @@ type SaveState =
   | { status: "saved" }
   | { status: "alreadySaved"; quoteId: string }
   | { status: "offerMissing"; lineNumbers: number[] }
+  | { status: "rejected" }
+  | { status: "extractionMissing" }
   | { status: "failed"; httpStatus: number | null };
 
 const saveLabel: Record<SaveState["status"], string> = {
@@ -48,6 +50,8 @@ const saveLabel: Record<SaveState["status"], string> = {
   saved: "Saved",
   alreadySaved: "Save draft",
   offerMissing: "Save draft",
+  rejected: "Save draft",
+  extractionMissing: "Save draft",
   // PRD section 6: "Couldn't save, your edits are still here" with Retry.
   failed: "Retry save",
 };
@@ -78,7 +82,11 @@ export function ReviewScreen({ extractionId, emailText, seed }: Props) {
     focusAfterAdd.current = null;
   }, [state.lines]);
 
-  const locked = save.status === "saving" || save.status === "saved" || save.status === "alreadySaved";
+  const locked =
+    save.status === "saving" ||
+    save.status === "saved" ||
+    save.status === "alreadySaved" ||
+    save.status === "extractionMissing";
 
   async function handleSave() {
     if (!summary.canSave || locked) return;
@@ -94,6 +102,14 @@ export function ReviewScreen({ extractionId, emailText, seed }: Props) {
         break;
       case "offerMissing":
         setSave({ status: "offerMissing", lineNumbers: outcome.linePositions.map((p) => p + 1) });
+        break;
+      case "rejected":
+        // The save gate should make this impossible, so keep the server's reason for tracing.
+        console.error("POST /api/quotes rejected the draft:", outcome.message);
+        setSave({ status: "rejected" });
+        break;
+      case "extractionMissing":
+        setSave({ status: "extractionMissing" });
         break;
       case "failed":
         setSave({ status: "failed", httpStatus: outcome.httpStatus });
@@ -386,6 +402,23 @@ function SaveStatus({
     );
   }
   if (save.status === "saved" || save.status === "saving") return null;
+  if (save.status === "extractionMissing") {
+    return (
+      <span role="alert" className="text-red-700">
+        Couldn&apos;t save: this extraction no longer exists.{" "}
+        <Link href="/" className={linkClass}>
+          Paste the email again
+        </Link>
+      </span>
+    );
+  }
+  if (save.status === "rejected") {
+    return (
+      <span role="alert" className="text-red-700">
+        Couldn&apos;t save: the server rejected this draft. Your edits are still here.
+      </span>
+    );
+  }
   if (save.status === "failed" || save.status === "offerMissing") {
     const message =
       save.status === "failed"
