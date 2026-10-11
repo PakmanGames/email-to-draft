@@ -83,6 +83,7 @@ async function storedRow(id: string | null) {
 afterEach(() => {
   llm.current = null;
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe("POST /api/extractions", () => {
@@ -162,6 +163,19 @@ describe("POST /api/extractions", () => {
       expect(await db.$count(extraction)).toBe(0);
     });
 
+    it("drops NUL characters, which Postgres can't store and the rep can't see", async () => {
+      const fake = useFake(fakeReply.json(GOOD));
+      const { body } = await post({ emailText: `${EMAIL}\u0000\n` });
+
+      expect(body).toMatchObject({ ok: true, status: "succeeded" });
+      expect((await storedRow(body.extractionId)).emailText).toBe(EMAIL);
+      expect(fake.calls[0].user).toBe(`<email>\n${EMAIL}\n</email>`);
+    });
+
+    it("treats an email of only NUL characters and whitespace as empty", async () => {
+      expect(await post({ emailText: "\u0000 \u0000" })).toMatchObject({ status: 400, body: { error: { code: "EMPTY_INPUT" } } });
+    });
+
     it("accepts exactly 20,000 characters after trimming", async () => {
       useFake(fakeReply.json({ line_items: [], no_items_reason: "other", superseded_note: null }));
       const { body } = await post({ emailText: ` ${"x".repeat(MAX_EMAIL_CHARS)} ` });
@@ -239,14 +253,63 @@ describe("POST /api/extractions", () => {
       const row = await storedRow(running.id);
       expect(row).toMatchObject({ status: "failed", errorCode: "CANCELLED", attempts: [expect.objectContaining({ errorCode: "CANCELLED" })] });
     });
+  });
 
-    it("keeps the model's attempts when matching fails", async () => {
+  describe("failures past the model still answer with a typed error (KI-012)", () => {
+    const INTERNAL_ERROR = {
+      code: "INTERNAL_ERROR",
+      message: "Something went wrong on the server.",
+      retryable: true,
+      retryAfterSeconds: null,
+    };
+
+    it("answers INTERNAL_ERROR with the extraction ID when matching fails, and keeps the attempts", async () => {
+      const log = vi.spyOn(console, "error").mockImplementation(() => {});
       useFake(fakeReply.json(GOOD));
       vi.mocked(matchLines).mockRejectedValueOnce(new Error("database is down"));
 
-      await expect(post({ emailText: EMAIL })).rejects.toThrow("database is down");
-      const [row] = await db.select().from(extraction);
-      expect(row).toMatchObject({ status: "failed", errorCode: null, result: null, attempts: [expect.objectContaining({ httpStatus: 200 })] });
+      const { status, body } = await post({ emailText: EMAIL });
+      expect(status).toBe(500);
+      expect(body).toEqual({ ok: false, extractionId: expect.any(String), error: INTERNAL_ERROR });
+      const row = await storedRow(body.extractionId);
+      expect(row).toMatchObject({
+        status: "failed",
+        errorCode: "INTERNAL_ERROR",
+        attempts: [expect.objectContaining({ httpStatus: 200, errorCode: null })],
+        result: { lines: [], notices: [{ code: "EXTRACTION_FAILED", message: INTERNAL_ERROR.message }] },
+      });
+      expect(log).toHaveBeenCalledWith(
+        `POST /api/extractions failed (extraction ${body.extractionId}):`,
+        expect.objectContaining({ message: "database is down" }),
+      );
+    });
+
+    it("still answers with the extraction ID when the final write fails", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      useFake(fakeReply.json(GOOD));
+      vi.spyOn(db, "update").mockImplementation(() => {
+        throw new Error("connection lost");
+      });
+
+      const { status, body } = await post({ emailText: EMAIL });
+      expect(status).toBe(500);
+      expect(body).toEqual({ ok: false, extractionId: expect.any(String), error: INTERNAL_ERROR });
+      // Nothing could be written after the insert, so the row is left as the pending trace.
+      expect(await storedRow(body.extractionId)).toMatchObject({ status: "pending" });
+    });
+
+    it("answers INTERNAL_ERROR without an ID when the row can't be written, before calling the model", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      const fake = useFake(fakeReply.json(GOOD));
+      vi.spyOn(db, "insert").mockImplementationOnce(() => {
+        throw new Error("database is down");
+      });
+
+      expect(await post({ emailText: EMAIL })).toEqual({
+        status: 500,
+        body: { ok: false, extractionId: null, error: INTERNAL_ERROR },
+      });
+      expect(fake.calls).toHaveLength(0);
     });
   });
 });

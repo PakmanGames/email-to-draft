@@ -279,6 +279,7 @@ export const ExtractionErrorCode = z.enum([
   "TIMEOUT", "RATE_LIMITED", "PROVIDER_ERROR", "MODEL_UNAVAILABLE",
   "INVALID_JSON", "SCHEMA_MISMATCH", "TRUNCATED",
   "CANCELLED",
+  "INTERNAL_ERROR",                        // a failure past the model, such as matching or the database write
 ]);
 
 export const ExtractionAttempt = z.strictObject({
@@ -301,6 +302,7 @@ export const ExtractionAttempt = z.strictObject({
 | `POST /api/quotes` | `SaveQuoteRequest` | `201 { quoteId }`, `409 { code: "ALREADY_SAVED", quoteId }` if this extraction already has a draft, `409 { code: "OFFER_MISSING", linePositions }` if an offer no longer exists |
 
 `extractionId` is non-null for every failure after input validation, so "Continue manually" can always open `/review/[extractionId]` with the email shown and zero lines.
+The one exception is an `INTERNAL_ERROR` that stopped the extraction row being written, when there is nothing to open.
 Every draft therefore has an extraction, and that extraction is the draft's trace.
 
 ```ts
@@ -351,7 +353,7 @@ export function getQuote(id: string): Promise<QuoteDetail | null>;
 
 ## 6. Extraction pipeline (T2)
 
-1. Validate input with zod: trimmed, non-empty, at most 20,000 characters. A body that isn't `{ emailText: string }` carries no email, so it is `EMPTY_INPUT` too.
+1. Validate input with zod: trimmed, non-empty, at most 20,000 characters. NUL characters are dropped first, because Postgres text can't store them and the rep can't see one to delete it. A body that isn't `{ emailText: string }` carries no email, so it is `EMPTY_INPUT` too.
 2. Insert the `extraction` row as `pending`.
 3. Call the model with a 20-second per-attempt timeout and an overall 28-second budget, so the server answers before the client's 30-second limit. Pass `request.signal` through so Cancel aborts the model call.
 4. Request settings: `response_format: { type: "json_schema", json_schema: { name: "rfq_extraction", strict: true, schema } }`, `reasoning_effort: "low"`, `temperature: 0` (reduces run-to-run variation but does not remove it), and a `max_completion_tokens` cap. `finish_reason === "length"` is treated as `TRUNCATED`.
@@ -362,7 +364,7 @@ export function getQuote(id: string): Promise<QuoteDetail | null>;
    - **NSN.** `normalizeNsn` accepts 13 digits with any separators and an optional "NSN" prefix. Anything else gets `NSN_INVALID` and becomes null.
    - **Units.** A fixed table, ignoring case and a trailing period: each, ea, pc, pcs, piece, pieces, blank = 1; dz, doz, dozen, dozens = 12; hd, hundred, hundreds = 100. Box, pack, pkg, pg (and boxes, bx, packs, pk, pkgs, package, packages) use `pack_size` when the email states it. Otherwise `quantityEach` is null with `UNIT_UNKNOWN`. Converted lines get an informational `UNIT_CONVERTED` warning.
    - **Quantity grounding.** If the quantity number (commas removed) is not found in `source_text`, add `QTY_NOT_IN_TEXT`. The same goes for `pack_size`, since it multiplies the quantity. The part number and NSN are blanked out of the text first, so a digit inside one can't vouch for an invented quantity. The check also accepts small number words ("a", "one" to "twelve") so "a dozen" (quantity 1, unit dozen) is not flagged.
-8. Run `matchLines`, build the `ReviewSeed`, and update the row with `status`, `result`, `attempts`, and `duration_ms`. A failed extraction stores its `error_code` and a seed with zero lines and an `EXTRACTION_FAILED` notice, so the review page renders it like any other.
+8. Run `matchLines`, build the `ReviewSeed`, and update the row with `status`, `result`, `attempts`, and `duration_ms`. A failed extraction stores its `error_code` and a seed with zero lines and an `EXTRACTION_FAILED` notice, so the review page renders it like any other. Any other failure (matching, the database, or a bug) answers 500 `INTERNAL_ERROR` with the extraction ID, and the row is stored the same way when the database allows it. Only a failed insert answers without an ID, since nothing was recorded.
 
 **Prompt rules** (versioned as `PROMPT_VERSION = "extract-v1"`):
 
