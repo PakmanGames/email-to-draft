@@ -94,7 +94,7 @@ Status values: **Accepted**, **Proposed** (waiting on an open question in the PR
 
 **Context:** "Prices from inventory only", and emails may contain instructions to change prices.
 
-**Decision:** The save request has no price field. The server looks up each offer, copies its details onto the line, and computes the total. Lines do not reference the offer table.
+**Decision:** The save request has no price field. The server looks up each offer, prices it from cost and the draft's markup (D-016), copies cost, price, and offer details onto the line, and computes the total. Lines do not reference the offer table.
 
 **Trade-off:** Saved drafts do not follow later inventory changes, which is the point of a draft quote. The inventory can be reloaded without breaking old drafts.
 
@@ -158,12 +158,24 @@ Status values: **Accepted**, **Proposed** (waiting on an open question in the PR
 
 ### D-015. Requests above stock are quoted at the requested quantity
 
-**Status:** Proposed (PRD Q6)
+**Status:** Accepted (PRD Q6 answered)
 
 **Context:** The brief says a request above on-hand is normal and "we can still quote it for however much we have". The agreed scope says requested and on-hand are "never capped or split".
 
-**Decision:** Quote the requested quantity. Show on hand, the shortfall, and lead time side by side, and let the rep lower the quantity by hand.
+**Decision:** Quote the requested quantity, never capped or split. The line shows a "short by N" warning, the draft shows how many lines are short (on screen and once saved), and a one-click "Quote N on hand" action lets the rep choose to quote only what we hold.
 
-**Alternatives:** Cap the quantity at what is on hand.
+**Alternatives:** Cap automatically at on hand; quote the requested quantity with no shortcut.
 
-**Trade-off:** Capping would silently change what the customer asked for, which conflicts with the agreed scope.
+**Trade-off:** One more control on short lines. In return both readings of the brief are covered, the system never changes the customer's number on its own, and quoting stock only is one click.
+
+### D-016. One markup per draft, 25% by default
+
+**Status:** Accepted (PRD Q2 answered)
+
+**Context:** Inventory holds `unit_cost`, and quoting at cost earns nothing. The brief requires prices from inventory only.
+
+**Decision:** Unit price is cost plus markup. There is one markup per draft, 25% by default and editable by the rep, stored as integer basis points and rounded half up to the cent. A single shared function prices lines on both the review screen and the server. The rep never types a price.
+
+**Alternatives:** No markup (price equals cost); a fixed markup the rep cannot change; letting the rep type prices.
+
+**Trade-off:** The 25% default is our assumption, not the brief's. Per-line overrides are deferred to P1. Sharing one pricing function means the price the rep sees is exactly the price saved.

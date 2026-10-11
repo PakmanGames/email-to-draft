@@ -57,7 +57,7 @@ T3 can start on its own fixture inventory and does not need to wait for T1.
 
 ### T0. Foundation (serial, blocks everything)
 
-**Owns:** repo root config, `docker-compose.yml`, `src/env.ts`, `src/lib/contracts/`, `src/lib/identifiers.ts`, `src/lib/db/`, `drizzle/`, stub files for every module in technical design section 5.7.
+**Owns:** repo root config, `docker-compose.yml`, `src/env.ts`, `src/lib/contracts/`, `src/lib/identifiers.ts`, `src/lib/pricing.ts`, `src/lib/db/`, `drizzle/`, stub files for every module in technical design section 5.7.
 
 **Build:**
 
@@ -67,7 +67,7 @@ T3 can start on its own fixture inventory and does not need to wait for T1.
 4. `src/env.ts` per technical design section 10.
 5. Drizzle schema and the first migration matching technical design section 4 exactly, including both extensions, the generated column, and all CHECK constraints.
 6. All zod contracts from technical design section 5, plus a test that `z.toJSONSchema(LlmExtraction)` meets Groq strict-mode rules (every property required, `additionalProperties: false` on every object).
-7. `normalizeNsn` and `partNumberKey` in `src/lib/identifiers.ts` with unit tests.
+7. `normalizeNsn` and `partNumberKey` in `src/lib/identifiers.ts`, and `DEFAULT_MARKUP_BPS` and `unitPriceCents` in `src/lib/pricing.ts`, all with unit tests (including half-up rounding).
 8. Stubs with the final signatures for `extractLines`, `matchLines`, `searchParts`, `saveQuote`, `listQuotes`, `getQuote`, and empty route handlers and pages.
 9. `src/lib/contracts/fixtures.ts` with three `ReviewSeed` examples: a clean all-high email, a mixed email (high, low with candidates, none, short stock, unit warning), and a no-items email.
 10. `.env.example` listing every variable.
@@ -121,7 +121,7 @@ Use a small fixture inventory inserted in tests, so this task does not depend on
 
 **Owns:** `src/app/page.tsx`, `src/app/review/`, `src/components/review/`, `src/components/paste/`, their tests.
 
-**Build:** the paste page (EXT-1, EXT-3) and the review screen (technical design section 8, REV-1 to REV-6).
+**Build:** the paste page (EXT-1, EXT-3) and the review screen (technical design section 8, REV-1 to REV-6, REV-9, and REV-10).
 Use fixtures from `src/lib/contracts/fixtures.ts` until T2 and T3 land.
 Save calls `POST /api/quotes` with the extraction ID, and handles `ALREADY_SAVED` by linking to the existing draft.
 
@@ -129,7 +129,8 @@ Save calls `POST /api/quotes` with the extraction ID, and handles `ALREADY_SAVED
 
 - Each fixture renders correctly, and the mixed fixture shows every state: high, low, none, short stock, unit warning, and a notice.
 - Component tests cover the save gate (including quantity warnings that must be confirmed), editing quantity, picking a candidate and a supplier, removing and adding lines, and `edited` tracking.
-- Routine cases (not in inventory, short stock, 0 on hand) use neutral styling, not error styling.
+- Routine cases (not in inventory, 0 on hand) use neutral styling. Short stock shows the line and draft warnings, and "Quote N on hand" works and is hidden at 0 on hand.
+- Changing the markup re-prices every line and the total with `unitPriceCents`.
 - No review state is kept in localStorage or anything else shared between tabs.
 - The paste page shows elapsed seconds and Cancel, and handles each error code with Retry and Continue manually.
 - The layout is checked visually at 1280px and 1024px, with no overflow, misalignment, or color-only signals.
@@ -143,10 +144,10 @@ Save calls `POST /api/quotes` with the extraction ID, and handles `ALREADY_SAVED
 **Done when:**
 
 - Integration tests show that saving the same extraction twice creates one quote, and the second save returns `ALREADY_SAVED`.
-- Tests show that client-sent prices cannot exist in the request and the total comes from inventory.
+- Tests show that client-sent prices cannot exist in the request, that prices come from inventory cost and `markupBps` (including rounding and 0%), that an out-of-range markup is rejected, and that the total matches the line prices.
 - Tests show that unmatched lines are saved unpriced, that a missing offer returns 409 with line positions, and that stock is unchanged after saving.
 - A test shows that two drafts from different extractions can each quote the full on-hand quantity of the same offer.
-- The list and detail pages render from seeded data.
+- The list and detail pages render from seeded data, and both show the short-stock warning when it applies.
 
 ### T6. Deploy (needs the user for Railway and Cloudflare access)
 
@@ -179,6 +180,7 @@ Walk the user through any step that needs their accounts.
 | Trace view | FAIL-7 | `/extractions/[id]` showing attempts, raw output, and issues |
 | Edit metrics on the drafts list | SAVE-4, G1 | Share of lines saved unedited |
 | Keyboard flow | REV-7 | |
+| Per-line markup override | REV-11 | Needs `markup_bps` on `quote_line` and a contract change |
 | Highlight source text | REV-8 | |
 | Customer and RFQ reference | EXT-10 | Needs a contract change to `LlmExtraction` |
 | Superseded-chain notice polish | EXT-9 | The probe showed `superseded_note` stays null without a clearer prompt rule |

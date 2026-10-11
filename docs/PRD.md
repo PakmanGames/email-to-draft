@@ -28,7 +28,7 @@ The rep does not want to learn how the matching works, but needs to know at a gl
 
 1. **A wrong High is worse than a correct Low.** The rep skims High lines, so a High label has to be right. When any signal is ambiguous, the line is Low. We accept more Low lines to keep High trustworthy.
 2. **The model is untrusted and non-deterministic.** The same email can produce different output on different runs, and any run can be wrong. Every model output passes deterministic checks before the rep sees it, and every run is traced.
-3. **Normal business is not an error.** A part we don't carry, a request larger than stock, zero on hand, and a part with no NSN are all routine. The screen shows them plainly, without error styling, and never blocks on them.
+3. **Normal business is not an error.** A part we don't carry, a request larger than stock, zero on hand, and a part with no NSN are all routine. The screen shows them plainly, without error styling, and never blocks on them. Short stock gets a warning, because the quote promises more than we hold, but a warning is not an error.
 4. **The rep has the last word.** Nothing becomes a draft until the rep saves it, and every line can be changed before saving.
 
 ### Metrics
@@ -102,19 +102,22 @@ Priority: **P0** is required for the MVP, **P1** is the next iteration, **P2** i
 | REV-1 | P0 | Lines appear in email order, next to the original email text. |
 | REV-2 | P0 | A summary bar shows line counts by confidence (for example "30 lines: 24 ready, 4 need a choice, 2 not in inventory"). A line is "ready" when it is High and has no quantity warning. Ready lines are compact and skimmable. Low lines are expanded with their candidates. Confidence is shown with text and an icon, not color alone. |
 | REV-3 | P0 | The rep can edit quantity, pick a candidate part, pick a supplier, remove a line, and add a line by searching inventory or as free text (unmatched). |
-| REV-4 | P0 | Requested quantity, on-hand quantity, and lead time are shown side by side. Asking for more than we have is normal: the line is quoted at the requested quantity with a neutral "short by 150" note, never capped or split across suppliers (see Q6). The rep can lower the quantity by hand. |
-| REV-5 | P0 | Unit and extended prices come from inventory only. The total covers priced lines, and unpriced lines are labeled as excluded from it. |
+| REV-4 | P0 | Requested quantity, on-hand quantity, and lead time are shown side by side. Asking for more than we have is allowed: the line is quoted at the requested quantity, never capped or split across suppliers, and gets a "short by 41" warning. A one-click "Quote 59 on hand" action sets the quantity to the selected supplier's on-hand amount, and is not offered when on hand is 0. The rep can also type any quantity. |
+| REV-5 | P0 | Unit price is the selected offer's `unit_cost` plus the draft's markup, rounded to the cent (REV-9). The rep never types a price. Extended price and the total follow from it. The total covers priced lines, and unpriced lines are labeled as excluded from it. |
 | REV-6 | P0 | Save is enabled only when every Low line has an explicit decision (a part was picked, or the rep chose to keep it unmatched), every line has a quantity greater than 0, and every quantity warning (missing, unit not understood, not found in the email, or line not confirmed against the email) has been confirmed or edited. When disabled, the button says what is left to do and links to the first such line. |
 | REV-7 | P1 | Keyboard flow: move between lines, pick candidates by number, and save without the mouse. |
 | REV-8 | P1 | Hovering or focusing a line highlights the text it came from in the original email. |
+| REV-9 | P0 | The draft has one markup, 25% by default, shown in the review header. The rep can change it (0% to 1000%), and every line re-prices immediately. Each line shows its cost next to its price. |
+| REV-10 | P0 | When any line quotes more than its supplier has on hand, the summary bar shows a draft-level warning ("2 lines quote more than on hand"). The warning never blocks saving, and it carries over to the saved draft (SAVE-3). |
+| REV-11 | P1 | The rep can override the markup on a single line. |
 
 ### 5.5 Save and view drafts (SAVE)
 
 | ID | Pri | Requirement |
 | --- | --- | --- |
-| SAVE-1 | P0 | Saving re-prices every line from inventory on the server, accepts no price from the client, snapshots the offer details onto the line, and writes the whole draft in one transaction. Each extraction produces at most one draft: saving again (double click, retry, or the same review open in a second tab) creates nothing new and links to the existing draft. |
+| SAVE-1 | P0 | Saving re-prices every line on the server from the offer's `unit_cost` and the draft's markup, accepts no price from the client, snapshots cost, price, and offer details onto the line, and writes the whole draft in one transaction. Each extraction produces at most one draft: saving again (double click, retry, or the same review open in a second tab) creates nothing new and links to the existing draft. |
 | SAVE-2 | P0 | Drafts may contain unmatched lines. Saving does not reserve or decrement stock. On-hand quantities are current inventory, not reduced by other drafts, so two drafts can both quote the same 5 units. |
-| SAVE-3 | P0 | A drafts list (newest first) shows date, line count, unmatched count, and total. Each draft opens read-only. |
+| SAVE-3 | P0 | A drafts list (newest first) shows date, line count, unmatched count, short-stock count, markup, and total. Each draft opens read-only, with a warning at the top when any line quotes more than on hand. |
 | SAVE-4 | P1 | Each saved line records whether it came from extraction or was added by hand, whether the rep edited it, and which part was suggested. This feeds metrics G1 and G4. |
 
 ### 5.6 Failure handling (FAIL)
@@ -138,7 +141,7 @@ This is the one firm requirement: the model will sometimes return garbage, and t
 | Model returns non-JSON or truncated JSON | One automatic repair retry, then "We couldn't read the model's answer" with Retry and Continue manually | Every attempt's raw output and parse error |
 | JSON is valid but breaks the schema (for example quantity "fifty") | Same as above | zod issues per attempt |
 | Model invents a part number that is not in the email | The line keeps its other fields, the invented identifier is dropped, and the line shows "Ignored a part number the model returned that is not in the email". A line with nothing grounded is discarded with a banner saying so. | The original model output and a list of dropped items |
-| Email tries to change prices or quantities (prompt injection) | No effect on prices, which come only from inventory. Quantities that do not appear in the line's text are flagged. | Raw output |
+| Email tries to change prices or quantities (prompt injection) | No effect on prices, which come only from inventory cost and the rep's markup. Quantities that do not appear in the line's text are flagged. | Raw output |
 | Email has no items (auto-reply, attachment only) | A notice explaining why, plus Add line | Extraction with status `no_items` |
 | Model takes longer than the time limit | "This is taking too long" with Retry and Continue manually | Attempt with error code `TIMEOUT` |
 | Provider rate limit (HTTP 429) | "Rate limited, try again in N seconds" with Continue manually | Attempt with error code `RATE_LIMITED` |
@@ -161,7 +164,7 @@ This is the one firm requirement: the model will sometimes return garbage, and t
 - Receiving email directly (IMAP, webhooks). The rep pastes the email.
 - Reading attachments (PDF, Excel).
 - Reserving stock, sending quotes to customers, or converting quotes to orders.
-- Markup, discounts, or pricing rules beyond inventory prices.
+- Discounts, customer-specific pricing, or any pricing rule beyond one markup per draft (per-line markup is P1, REV-11).
 - Editing a draft after it is saved.
 - Reviewing several emails at the same time. One email at a time is enough, but extra tabs must not break anything.
 - Reserving stock, or netting on-hand quantities across drafts.
@@ -171,7 +174,7 @@ This is the one firm requirement: the model will sometimes return garbage, and t
 ## 9. Assumptions
 
 1. The LLM provider is **GroqCloud** (free plan) using `openai/gpt-oss-120b` with strict JSON-schema output. Confirmed on 2026-10-11 (Q1).
-2. The quoted unit price equals the inventory `unit_cost` column as-is, with no markup. See Q2.
+2. The quoted unit price is the inventory `unit_cost` plus a markup, rounded half up to the cent. The markup defaults to 25%, and the rep can change it per draft (Q2). Prices are still "from inventory only": the rep sets the markup, never a price.
 3. Every inventory quantity and price is per each.
 4. Inventory is clean, with no messy or invalid rows (confirmed by the brief). The loader still validates and the constraints still state the assumptions, but the loader never cleans or repairs data.
 5. Two inventory values look like missing data but are real: a quantity of 0 means the supplier has none on hand right now, and a blank NSN means the part has no NSN. A blank NSN is stored as NULL, not an empty string, so it can never match anything.
@@ -184,11 +187,11 @@ This is the one firm requirement: the model will sometimes return garbage, and t
 | # | Question | Default if unanswered |
 | --- | --- | --- |
 | Q1 | Is the API key for GroqCloud (groq.com) or xAI Grok (x.ai)? | **Answered: GroqCloud.** A key was created and the model was tested on 2026-10-11. |
-| Q2 | Should quotes apply a markup over `unit_cost`? | No markup. Price equals `unit_cost`. |
+| Q2 | Should quotes apply a markup over `unit_cost`? | **Answered:** yes. 25% by default, and the rep can change it (REV-9). |
 | Q3 | Which subdomain should the app live on? | **Answered:** `email-to-draft.apak.ca` |
 | Q4 | Should the default supplier favor price or lead time? Email 10 (AOG) suggests lead time sometimes matters more. | Price first, as in assumption 7. The rep overrides. |
 | Q5 | Should a low-confidence line be allowed in a saved draft without an explicit decision? | No. Save requires a decision on every Low line (REV-6). |
-| Q6 | The brief says that when a request exceeds stock "we can still quote it for however much we have". Does that mean quote the requested quantity and show the shortfall, or lower the quantity to what is on hand? | Quote the requested quantity, never capped (agreed scope). The rep can lower it by hand. |
+| Q6 | The brief says that when a request exceeds stock "we can still quote it for however much we have". Does that mean quote the requested quantity and show the shortfall, or lower the quantity to what is on hand? | **Answered:** quote the requested quantity, offer a one-click "quote what we have" action, and warn on the line and on the draft when quoting more than on hand (REV-4, REV-10). |
 
 ## 11. Acceptance test set
 

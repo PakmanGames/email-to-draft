@@ -127,6 +127,7 @@ CREATE TABLE quote (
   created_at    timestamptz NOT NULL DEFAULT now(),
   -- One draft per extraction. Makes Save idempotent across double clicks, retries, and a second tab.
   extraction_id uuid NOT NULL UNIQUE REFERENCES extraction (id),
+  markup_bps    integer NOT NULL CHECK (markup_bps BETWEEN 0 AND 100000),  -- 2500 = 25%; one markup per draft
   total_cents   bigint NOT NULL CHECK (total_cents >= 0)
 );
 
@@ -144,20 +145,24 @@ CREATE TABLE quote_line (
   part_number      text NULL,
   description      text NULL,
   supplier         text NULL,
-  unit_price_cents integer NULL CHECK (unit_price_cents > 0),
+  unit_cost_cents  integer NULL CHECK (unit_cost_cents > 0),
+  unit_price_cents integer NULL CHECK (unit_price_cents > 0),   -- cost plus the draft's markup
   qty_on_hand      integer NULL CHECK (qty_on_hand >= 0),
   lead_time_days   integer NULL CHECK (lead_time_days >= 0),
   PRIMARY KEY (quote_id, position),
   -- A line is either fully priced from an offer or fully unmatched.
   CHECK (
-    (part_number IS NULL AND supplier IS NULL AND unit_price_cents IS NULL AND qty_on_hand IS NULL AND lead_time_days IS NULL)
+    (part_number IS NULL AND supplier IS NULL AND unit_cost_cents IS NULL AND unit_price_cents IS NULL AND qty_on_hand IS NULL AND lead_time_days IS NULL)
     OR
-    (part_number IS NOT NULL AND supplier IS NOT NULL AND unit_price_cents IS NOT NULL AND qty_on_hand IS NOT NULL AND lead_time_days IS NOT NULL)
-  )
+    (part_number IS NOT NULL AND supplier IS NOT NULL AND unit_cost_cents IS NOT NULL AND unit_price_cents IS NOT NULL AND qty_on_hand IS NOT NULL AND lead_time_days IS NOT NULL)
+  ),
+  -- Markup is never negative, so a line never sells below cost.
+  CHECK (unit_price_cents >= unit_cost_cents)
 );
 ```
 
 Money is `numeric` in the database and integer cents in TypeScript, never floats.
+Markup is integer basis points (2500 = 25%), and a unit price is `cost × (10000 + bps) / 10000`, rounded half up in integer arithmetic.
 Inventory input facts: 23,584 offer rows over 12,000 part numbers, columns `part_number,nsn,description,supplier,qty_on_hand,unit_cost,lead_time_days`.
 Several part numbers can share one NSN.
 
@@ -301,6 +306,7 @@ Every draft therefore has an extraction, and that extraction is the draft's trac
 ```ts
 export const SaveQuoteRequest = z.strictObject({
   extractionId: z.uuid(),                  // one draft per extraction
+  markupBps: z.number().int().min(0).max(100000), // 2500 = 25%
   lines: z.array(z.strictObject({
     origin: z.enum(["extracted", "manual"]),
     edited: z.boolean(),
@@ -309,7 +315,7 @@ export const SaveQuoteRequest = z.strictObject({
     matchConfidence: Confidence.nullable(),
     matchReason: z.string().nullable(),
     suggestedPartNumber: z.string().nullable(), // what matching preselected, for metric G4
-    // Both null for an unmatched line. No price field: the server prices from inventory.
+    // Both null for an unmatched line. No price field: the server prices from inventory cost and markupBps.
     partNumber: z.string().nullable(),
     supplier: z.string().nullable(),
   })).max(200),
@@ -330,6 +336,10 @@ export function extractLines(emailText: string, deps: { llm: LlmClient; signal: 
 // lib/matching (T3)
 export function matchLines(lines: ExtractedLine[]): Promise<LineMatch[]>;
 export function searchParts(query: string): Promise<Candidate[]>;
+
+// lib/pricing.ts (T0). Shared by the review screen and saveQuote, so the price the rep sees is the price saved.
+export const DEFAULT_MARKUP_BPS = 2500;
+export function unitPriceCents(unitCostCents: number, markupBps: number): number; // rounds half up
 
 // lib/quotes (T5)
 export function saveQuote(req: SaveQuoteRequest): Promise<{ quoteId: string; created: boolean }>;
@@ -418,13 +428,15 @@ The reason string says which rule picked it.
 
 ## 8. Review screen (T4)
 
-- **Layout.** Original email on the left (escaped `pre-wrap`, collapsible). Lines table on the right. Summary bar and Save button in a sticky header.
-- **Line row.** Requested text (with converted quantity), match (part number, description, confidence badge with icon and text, reason), supplier selector (supplier, on hand, unit price, lead time), editable quantity, on hand with a short-stock badge, unit price, extended price, and a remove button.
+- **Layout.** Original email on the left (escaped `pre-wrap`, collapsible). Lines table on the right. Summary bar, markup input (default 25%), and Save button in a sticky header.
+- **Line row.** Requested text (with converted quantity), match (part number, description, confidence badge with icon and text, reason), supplier selector (supplier, on hand, unit price, lead time), editable quantity, on hand, unit price with cost beneath it, extended price, and a remove button.
 - **Low rows.** Expanded with a radio list of candidates, a "Keep unmatched" option, and a search box backed by `GET /api/parts`.
 - **None rows.** "Not in inventory" with the same search box, and unpriced until a part is picked.
 - **Warnings.** Shown inline under the line, in amber, with the warning message.
 - **Notices.** Banner at the top for `NO_ITEMS`, `LINES_DISCARDED`, `SUPERSEDED`, and `EXTRACTION_FAILED`.
-- **Routine cases.** "Not in inventory", "short by N", and "0 on hand" use neutral styling, not error colors (PRD principle 3).
+- **Routine cases.** "Not in inventory" and "0 on hand" use neutral styling, not error colors (PRD principle 3).
+- **Short stock.** A line whose quantity exceeds the selected supplier's on hand shows an amber "short by N" warning and a "Quote N on hand" button that sets the quantity to on hand. The button is hidden when on hand is 0, and using it counts as an edit. The summary bar adds "N lines quote more than on hand". None of this blocks Save.
+- **Markup.** Changing the markup re-prices every line and the total at once with `unitPriceCents`. It is sent as `markupBps` on save.
 - **State.** Client-side reducer held in memory and keyed by the extraction ID. Nothing goes in localStorage or other cross-tab storage, so a second tab never affects the first. `edited` is computed per line by comparing with the seed.
 - **Save gate.** REV-6. Lines with `QTY_MISSING`, `UNIT_UNKNOWN`, `QTY_NOT_IN_TEXT`, or `LINE_NOT_GROUNDED` need the rep to confirm or edit the quantity. The button label states what is left ("2 lines need a choice, 1 quantity to confirm"). If the save returns `ALREADY_SAVED`, show a link to the existing draft.
 
@@ -433,9 +445,9 @@ Develop against fixtures in `src/lib/contracts/fixtures.ts` (T0 provides a few `
 ## 9. Saving quotes (T5)
 
 1. Validate `SaveQuoteRequest`.
-2. In one transaction: look up each matched line's offer by `(part_number, supplier)` and return `OFFER_MISSING` with positions if any are missing. Compute `total_cents` from the offers' prices. Insert the quote with `ON CONFLICT (extraction_id) DO NOTHING`; if nothing was inserted, return `ALREADY_SAVED` with the existing draft's ID. Otherwise insert the lines with snapshotted offer fields.
-3. Drafts list: `created_at`, line count, unmatched count, and total, newest first.
-4. Read-only detail: snapshot values only, plus a link to the extraction trace.
+2. In one transaction: look up each matched line's offer by `(part_number, supplier)` and return `OFFER_MISSING` with positions if any are missing. Price each line with `unitPriceCents(offer cost, markupBps)` and compute `total_cents` from those prices. Insert the quote with `ON CONFLICT (extraction_id) DO NOTHING`; if nothing was inserted, return `ALREADY_SAVED` with the existing draft's ID. Otherwise insert the lines with snapshotted cost, price, and offer fields.
+3. Drafts list: `created_at`, line count, unmatched count, short-stock count (lines where `quantity > qty_on_hand`), markup, and total, newest first.
+4. Read-only detail: snapshot values only, a warning banner when any line quotes more than on hand, and a link to the extraction trace.
 5. Saving never writes to `offer`. On-hand quantities are not netted across drafts, so two drafts can quote the same stock.
 
 ## 10. Configuration
@@ -454,7 +466,7 @@ Develop against fixtures in `src/lib/contracts/fixtures.ts` (T0 provides a few `
 
 | Layer | Tool | Covers |
 | --- | --- | --- |
-| Unit | Vitest | `normalizeNsn`, `partNumberKey`, unit conversion, grounding (including `LINE_NOT_GROUNDED`), zod refinements against garbage fixtures, every High gate check, default supplier, totals |
+| Unit | Vitest | `normalizeNsn`, `partNumberKey`, unit conversion, grounding (including `LINE_NOT_GROUNDED`), zod refinements against garbage fixtures, every High gate check, default supplier, `unitPriceCents` rounding, totals |
 | DB integration | Vitest + docker compose Postgres | Loader constraints (bad rows rejected, rollback), matching queries on a small fixture inventory, idempotent save |
 | E2E | Playwright | Paste to review to save to list to read-only, with `FakeLlmClient`. Each failure in section 6 of the PRD. |
 | Live eval | Script | `pnpm eval:emails` runs each of the 12 sample emails 3 times through the real model, paced to stay under 8K tokens per minute, and prints per-email line counts, confidence mix, warnings, latency, and whether the 3 runs agreed |
