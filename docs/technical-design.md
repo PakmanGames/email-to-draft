@@ -345,7 +345,7 @@ export function getQuote(id: string): Promise<QuoteDetail | null>;
    - **Grounding.** Normalize the email and each identifier to `[A-Z0-9]` and check that the identifier is a substring. Drop ungrounded identifiers with `IDENTIFIER_DROPPED`. Discard a line whose part number, NSN, and description are all missing after grounding, and add a `LINES_DISCARDED` notice.
    - **NSN.** `normalizeNsn` accepts 13 digits with any separators and an optional "NSN" prefix. Anything else gets `NSN_INVALID` and becomes null.
    - **Units.** A fixed table: each, ea, pc, pcs, blank = 1; dz, doz, dozen = 12; hd, hundred = 100. Box, pack, pkg, pg use `pack_size` when the email states it. Otherwise `quantityEach` is null with `UNIT_UNKNOWN`. Converted lines get an informational `UNIT_CONVERTED` warning.
-   - **Quantity grounding.** If the quantity number (commas removed) is not found in `source_text`, add `QTY_NOT_IN_TEXT`. Word quantities like "a dozen" are handled by the unit table, not by this check.
+   - **Quantity grounding.** If the quantity number (commas removed) is not found in `source_text`, add `QTY_NOT_IN_TEXT`. The check also accepts small number words ("a", "one" to "twelve") so "a dozen" (quantity 1, unit dozen) is not flagged.
 8. Run `matchLines`, build the `ReviewSeed`, and update the row with `status`, `result`, `attempts`, and `duration_ms`.
 
 **Prompt rules** (versioned as `PROMPT_VERSION = "extract-v1"`):
@@ -354,8 +354,17 @@ export function getQuote(id: string): Promise<QuoteDetail | null>;
 - Transcribe identifiers and quantities exactly as written. Never guess a part number.
 - In reply or forward chains, use the latest message, and set `superseded_note` when it changes or withdraws earlier items.
 - Ignore signatures, disclaimers, and phone numbers.
+- Quantities written as words become a number plus a unit: "a dozen" is quantity 1, unit "dozen". Without this rule the model returns a null quantity (seen in the probe below).
 - Return zero items with a `no_items_reason` when nothing is requested.
 - Do not tune the prompt against the answer keys.
+
+**Probe results (2026-10-11).** A real strict-schema call with the section 5.1 shape and `reasoning_effort: "low"` on sample email 06 (5 lines):
+
+- 1.5 s end to end, 527 prompt tokens and 628 completion tokens (242 of them reasoning).
+- The nullable `anyOf` schema is accepted in strict mode and the output matches it.
+- Part numbers, "1,500" as 1500, and "boxes of 100" as quantity 2 with pack size 100 were transcribed correctly.
+- "a dozen" came back as a null quantity and unit, which led to the word-quantity prompt rule above.
+- Rate limit headers report 1,000 requests per day and 8,000 tokens per minute. At about 1.2K tokens per 5-line email, a 30-line email should cost about 4K tokens, so at most two big emails per minute.
 
 **Fault injection (FAIL-6, P1).** When `FAULT_INJECTION=1`, the paste page shows a selector, and the route swaps in a `FakeLlmClient` returning one of: malformed JSON, a schema violation, a hallucinated part number, a hang until timeout, or a 429.
 The same fake is used by unit and E2E tests.

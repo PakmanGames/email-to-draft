@@ -136,7 +136,7 @@ This is the one firm requirement: the model will sometimes return garbage, and t
 ## 7. Non-functional requirements
 
 - **Latency:** extraction p50 under 8 seconds for a 30-line email, with a hard limit of 30 seconds. Matching all lines takes under 500 ms.
-- **Provider limits:** the Groq free plan allows 30 requests per minute and 8K tokens per minute for the chosen model, which is enough for one rep. We keep the prompt short and reasoning effort low so one 30-line email stays well under the per-minute token limit.
+- **Provider limits:** the Groq free plan allows 30 requests per minute, 1,000 requests per day, and 8K tokens per minute for the chosen model, which is enough for one rep. Automated tests never call the real model, so they don't use up the daily limit. We keep the prompt short and reasoning effort low so one 30-line email stays well under the per-minute token limit.
 - **Browsers:** current Chrome, desktop first, laid out for 1280px wide and up, still usable at 1024px.
 - **Accessibility:** confidence is never conveyed by color alone. All controls work with the keyboard.
 - **Security:** the LLM API key stays on the server only. The email is never rendered as HTML. All inputs are validated with zod at the API boundary.
@@ -154,7 +154,7 @@ This is the one firm requirement: the model will sometimes return garbage, and t
 
 ## 9. Assumptions
 
-1. The LLM provider is **GroqCloud** (free plan) using `openai/gpt-oss-120b` with strict JSON-schema output. See open question Q1.
+1. The LLM provider is **GroqCloud** (free plan) using `openai/gpt-oss-120b` with strict JSON-schema output. Confirmed on 2026-10-11 (Q1).
 2. The quoted unit price equals the inventory `unit_cost` column as-is, with no markup. See Q2.
 3. Every inventory quantity and price is per each.
 4. Inventory is clean, per the agreed scope. If it is not, the load fails loudly instead of silently fixing data.
@@ -165,7 +165,7 @@ This is the one firm requirement: the model will sometimes return garbage, and t
 
 | # | Question | Default if unanswered |
 | --- | --- | --- |
-| Q1 | Is the API key for GroqCloud (groq.com) or xAI Grok (x.ai)? | GroqCloud. The client uses the OpenAI-compatible API, so switching is a base URL and model change. |
+| Q1 | Is the API key for GroqCloud (groq.com) or xAI Grok (x.ai)? | **Answered: GroqCloud.** A key was created and the model was tested on 2026-10-11. |
 | Q2 | Should quotes apply a markup over `unit_cost`? | No markup. Price equals `unit_cost`. |
 | Q3 | Which subdomain should the app live on? | `quotes.<your-domain>` |
 | Q4 | Should the default supplier favor price or lead time? Email 10 (AOG) suggests lead time sometimes matters more. | Price first, as in assumption 5. The rep overrides. |

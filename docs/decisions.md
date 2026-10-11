@@ -22,7 +22,7 @@ Status values: **Accepted**, **Proposed** (waiting on an open question in the PR
 
 ### D-002. GroqCloud `openai/gpt-oss-120b` with strict JSON schema, still validated with zod
 
-**Status:** Proposed (PRD Q1: Groq or xAI)
+**Status:** Accepted (provider confirmed and model tested on 2026-10-11)
 
 **Context:** The available key is on a free plan. Strict structured output is supported on Groq only for the `gpt-oss` and `qwen3` models.
 
@@ -30,7 +30,7 @@ Status values: **Accepted**, **Proposed** (waiting on an open question in the PR
 
 **Alternatives:** The 20B model (same rate limits, less accurate); JSON object mode (valid JSON, but no schema enforcement); the Vercel AI SDK `generateObject` (hides the raw output we want to trace).
 
-**Trade-off:** Strict mode guarantees shape, not meaning, and truncated output can still break JSON, so zod validation is still required. The free plan's 8K tokens per minute limits throughput, which is fine for one rep.
+**Trade-off:** Strict mode guarantees shape, not meaning, and truncated output can still break JSON, so zod validation is still required. The free plan's 8K tokens per minute limits throughput, which is fine for one rep. A live test returned a 5-line extraction in 1.5 s (technical design section 6, probe results).
 
 ### D-003. The model transcribes, code decides
 
