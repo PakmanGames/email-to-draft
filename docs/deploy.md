@@ -62,8 +62,9 @@ The `postgres` service has no public endpoint, on purpose, so the load runs insi
 `mock_data/` is not in git, so generate it locally first (`python3 generate_mock_data.py --rows 1000`).
 
 ```sh
-# Once per machine: let Railway SSH in with your GitHub SSH keys.
-railway ssh keys github
+# Once per machine: register the SSH key from your agent (or pass --key <fingerprint>).
+# `railway ssh keys github` fails unless Railway's GitHub integration can read your keys.
+railway ssh keys add
 
 # Copy the CSV into the running container and load it.
 railway service files --service web upload mock_data/shared/inventory.csv /tmp/inventory.csv
@@ -72,7 +73,7 @@ railway ssh --service web -- sh -c 'cd /app && pnpm db:load /tmp/inventory.csv'
 
 The loader replaces the whole inventory in one transaction, so it is safe to rerun, and a failure leaves the previous inventory in place.
 The uploaded file lives in the container's filesystem and disappears on the next deploy.
-Expected output: `Loaded 12,000 parts and 23,584 offers`.
+Expected output: `Loaded 12,000 parts and 23,584 offers`. Production was first loaded this way on 2026-10-11 in 2.0 s.
 
 ## Custom domain
 
