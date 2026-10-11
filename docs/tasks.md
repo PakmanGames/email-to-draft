@@ -53,9 +53,22 @@ T3 can start on its own fixture inventory and does not need to wait for T1.
 > Commit with conventional prefixes (`feat:`, `fix:`, `test:`, `chore:`), present tense, under 72 characters, no co-author lines.
 > End with a short report: what you built, what you tested, anything left undone, and any contract changes you need.
 
+## Working in this repo (established by T0)
+
+- **Next.js 16.4 differs from your training data.** Read the relevant guide in `node_modules/next/dist/docs/` before writing Next.js code (see `AGENTS.md`). Heed deprecation notices.
+- **UI kit.** shadcn/ui v4 on Base UI (`@base-ui/react`). `cn` comes from shadcn's `cn` package via `src/lib/utils.ts`.
+- **Setup in a fresh worktree:** `pnpm install`, `cp .env.example .env`, `pnpm db:up`, `pnpm db:migrate`. `mock_data/` is gitignored, so generate it with `python3 generate_mock_data.py --rows 1000` if it is missing.
+- **One shared Postgres.** Every worktree uses the same container (`email-to-draft`, port 5432). Never stop it, remove its volume, or run `docker compose down -v`. The dev database `rfq` is shared too, and only T1's loader writes inventory into it.
+- **Integration tests** (`*.int.test.ts`) get a fresh, randomly named database per run, so parallel runs never collide. Call `setupTestDb()` from `src/test/db.ts` at the top of the file.
+- **Schema and migrations are frozen.** No task after T0 generates a migration or edits `src/lib/contracts/`. Put any needed change in your final report.
+- **Real LLM calls are scarce.** The free plan allows 1,000 requests per day and 8K tokens per minute. Tests always use the fake client.
+- **Shipping.** Push your branch and open a PR to `main`. Do not merge.
+
 ## Task cards
 
 ### T0. Foundation (serial, blocks everything)
+
+**Status:** Done, merged in `f363734` (PR #3).
 
 **Owns:** repo root config, `docker-compose.yml`, `src/env.ts`, `src/lib/contracts/`, `src/lib/identifiers.ts`, `src/lib/pricing.ts`, `src/lib/db/`, `drizzle/`, stub files for every module in technical design section 5.7.
 
