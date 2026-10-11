@@ -3,14 +3,17 @@
  * from it. One ReviewScreen holds this in memory for one extraction. Nothing is written to
  * storage that other tabs can see, so a second tab never affects the first (EXT-4).
  */
-import type {
-  Candidate,
-  LineWarning,
-  LineWarningCode,
-  Offer,
-  ReviewSeed,
-  SaveQuoteRequest,
+import {
+  MAX_LINE_QUANTITY,
+  type Candidate,
+  type LineWarning,
+  type LineWarningCode,
+  type Offer,
+  type ReviewSeed,
+  type SaveQuoteRequest,
 } from "@/lib/contracts";
+// The module itself, not "@/lib/matching", which pulls in the database client.
+import { pickDefaultSupplier } from "@/lib/matching/default-supplier";
 import { DEFAULT_MARKUP_BPS, unitPriceCents } from "@/lib/pricing";
 
 export type SeedLine = ReviewSeed["lines"][number];
@@ -22,9 +25,6 @@ const QUANTITY_CHECK_CODES: ReadonlySet<LineWarningCode> = new Set([
   "QTY_NOT_IN_TEXT",
   "LINE_NOT_GROUNDED",
 ]);
-
-/** Far above any real RFQ line, and keeps quantity × price well inside safe integer cents. */
-export const MAX_QUANTITY = 1_000_000;
 
 /** REV-9: the rep can set 0% to 1000%. */
 const MAX_MARKUP_BPS = 100_000;
@@ -71,12 +71,16 @@ export type ReviewAction =
   | { type: "addLine"; requestedText: string; candidate: Candidate | null }
   | { type: "setMarkup"; text: string };
 
-/** A whole number from 1 to MAX_QUANTITY. Commas and spaces are ignored ("1,500"). */
+/**
+ * A whole number the draft can hold, from 1 to MAX_LINE_QUANTITY, or null. Commas and spaces
+ * are ignored ("1,500"). Anything else blocks Save on that line, so the rep fixes it here
+ * instead of the save failing (KI-001).
+ */
 export function parseQuantity(text: string): number | null {
   const digits = text.replace(/[,\s]/g, "");
   if (!/^\d+$/.test(digits)) return null;
   const quantity = Number(digits);
-  return quantity >= 1 && quantity <= MAX_QUANTITY ? quantity : null;
+  return quantity >= 1 && quantity <= MAX_LINE_QUANTITY ? quantity : null;
 }
 
 /** Percent with up to two decimals ("25", "12.5") to basis points, or null when out of range. */
@@ -91,28 +95,6 @@ export function parseMarkupBps(text: string): number | null {
 /** Basis points as the percent the rep types: 2500 → "25", 1250 → "12.5". */
 export function formatMarkupPercent(bps: number): string {
   return String(bps / 100);
-}
-
-/**
- * The supplier preselected for a part (PRD assumption 7, the rule matching uses): the cheapest
- * offer that can fill the quantity, ties to the shorter lead time. If none can, the one with the
- * most on hand, ties to the lower price and then the shorter lead time. Applied when the rep picks a part matching didn't
- * preselect, so that part gets a supplier the same way a High match does.
- */
-export function pickDefaultOffer(offers: Offer[], quantity: number | null): { offer: Offer; reason: string } {
-  const cheapest = (a: Offer, b: Offer) => a.unitCostCents - b.unitCostCents || a.leadTimeDays - b.leadTimeDays;
-  if (quantity === null) {
-    return { offer: [...offers].sort(cheapest)[0], reason: "Cheapest supplier. Quantity not confirmed yet" };
-  }
-  const canFill = offers.filter((offer) => offer.qtyOnHand >= quantity).sort(cheapest);
-  if (canFill.length > 0) {
-    return { offer: canFill[0], reason: `Cheapest supplier that can fill ${quantity.toLocaleString("en-US")}` };
-  }
-  const [offer] = [...offers].sort((a, b) => b.qtyOnHand - a.qtyOnHand || cheapest(a, b));
-  return {
-    offer,
-    reason: `No supplier can fill ${quantity.toLocaleString("en-US")}. Most on hand: ${offer.qtyOnHand.toLocaleString("en-US")}`,
-  };
 }
 
 /**
@@ -167,13 +149,17 @@ function selectedOffer(line: ReviewLine): Offer | null {
   return selectedPart(line)?.offers.find((o) => o.supplier === selection.supplier) ?? null;
 }
 
+/**
+ * Selects a part with matching's default supplier rule for the line's quantity, the way a
+ * High match comes preselected (KI-009). A part found by search joins the line's candidates.
+ */
 function withPart(line: ReviewLine, candidate: Candidate): ReviewLine {
   const known = line.candidates.some((c) => c.partNumber === candidate.partNumber);
-  const { offer, reason } = pickDefaultOffer(candidate.offers, parseQuantity(line.quantityText));
+  const { supplier, reason } = pickDefaultSupplier(candidate.offers, parseQuantity(line.quantityText));
   return {
     ...line,
     candidates: known ? line.candidates : [...line.candidates, candidate],
-    selection: { kind: "part", partNumber: candidate.partNumber, supplier: offer.supplier },
+    selection: { kind: "part", partNumber: candidate.partNumber, supplier },
     supplierReason: reason,
   };
 }
@@ -188,8 +174,8 @@ function withQuantity(line: ReviewLine, text: string): ReviewLine {
   const part = selectedPart(line);
   const quantity = parseQuantity(text);
   if (!part || line.supplierReason === null || quantity === null) return next;
-  const { offer, reason } = pickDefaultOffer(part.offers, quantity);
-  return { ...next, selection: { kind: "part", partNumber: part.partNumber, supplier: offer.supplier }, supplierReason: reason };
+  const { supplier, reason } = pickDefaultSupplier(part.offers, quantity);
+  return { ...next, selection: { kind: "part", partNumber: part.partNumber, supplier }, supplierReason: reason };
 }
 
 function updateLine(state: ReviewState, key: string, update: (line: ReviewLine) => ReviewLine): ReviewState {

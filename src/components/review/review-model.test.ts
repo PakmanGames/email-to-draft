@@ -8,7 +8,6 @@ import {
   initReviewState,
   parseMarkupBps,
   parseQuantity,
-  pickDefaultOffer,
   reviewReducer,
   summarize,
   viewLine,
@@ -46,12 +45,12 @@ describe("parseQuantity", () => {
     ["40", 40],
     ["1,500", 1500],
     [" 12 ", 12],
-    ["1000000", 1_000_000],
+    ["2147483647", 2_147_483_647],
   ])("reads %j as %i", (text, quantity) => {
     expect(parseQuantity(text)).toBe(quantity);
   });
 
-  it.each(["", "0", "-3", "2.5", "1e3", "abc", "1000001"])("rejects %j", (text) => {
+  it.each(["", "0", "-3", "2.5", "1e3", "abc", "2147483648"])("rejects %j", (text) => {
     expect(parseQuantity(text)).toBeNull();
   });
 });
@@ -70,25 +69,6 @@ describe("parseMarkupBps", () => {
 
   it.each(["", "-1", "1000.01", "12.345", "abc", "25%"])("rejects %j", (text) => {
     expect(parseMarkupBps(text)).toBeNull();
-  });
-});
-
-describe("pickDefaultOffer", () => {
-  it("picks the cheapest supplier that can fill, ties to the shorter lead time", () => {
-    expect(pickDefaultOffer(searched.offers, 100)).toEqual({
-      offer: searched.offers[1],
-      reason: "Cheapest supplier that can fill 100",
-    });
-  });
-
-  it("picks the most on hand when nobody can fill, ties to the lower price, then lead time", () => {
-    const { offer, reason } = pickDefaultOffer(searched.offers, 1000);
-    expect(offer.supplier).toBe("Fast Cheap");
-    expect(reason).toBe("No supplier can fill 1,000. Most on hand: 500");
-  });
-
-  it("picks the cheapest when the quantity isn't known yet", () => {
-    expect(pickDefaultOffer(searched.offers, null).offer.supplier).toBe("Small Stock");
   });
 });
 
