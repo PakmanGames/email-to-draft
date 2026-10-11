@@ -53,9 +53,10 @@ export function LineRow({ view, markupBps, dispatch }: Props) {
     ? hasCandidates ? "Hide options" : "Hide search"
     : hasCandidates ? "Change part" : "Find a part";
 
-  // The reason belongs to the match. Skip it where the status line already says the same.
+  // A None line's reason is "Not in inventory": the status line says so while it is unmatched,
+  // and next to a part the rep found by search it would read as a contradiction.
   const reason = line.seed?.match.reason;
-  const showReason = reason && !(confidence === "none" && !part && reason === "Not in inventory");
+  const showReason = Boolean(reason) && confidence !== "none";
 
   return (
     <li id={`line-${key}`} aria-label={`Line ${number}`} className={cn(LINE_GRID, "gap-y-2 px-3 py-2.5")}>
