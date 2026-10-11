@@ -9,7 +9,7 @@
     "lint": "eslint --max-warnings 0",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
-    "test:unit": "vitest run --project unit",
+    "test:unit": "vitest run --project unit --project component",
     "test:int": "vitest run --project integration",
     "test:e2e": "playwright install chromium && playwright test",
     "db:up": "docker compose up -d --wait",
