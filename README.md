@@ -29,3 +29,10 @@ Customers send requests for quotes by email in every format you can imagine: tab
 - Match with a confidence the rep understands. Exact, then fuzzy, per line. The confidence belongs to the match, says why, and drives the screen: high is safe to skim, low makes the rep choose, no match says so and keeps the line.
 - Review and save. Fix quantities, pick parts or suppliers, remove or add lines. Requested and on-hand shown side by side, never capped or split. Prices from inventory only. Drafts can hold unmatched lines, don't reserve stock, and open read-only from a list.
 - Garbage never reaches the rep or the database. Malformed, plausible-but-wrong, or no output: no crash, nothing saved without a human seeing it, the rep can always finish, and you can trace what happened. Emails are untrusted. One failure handled live in the demo.
+
+## Docs
+
+- [PRD](docs/PRD.md): requirements, success metrics, open questions
+- [Technical design](docs/technical-design.md): architecture, data model, contracts
+- [Task plan](docs/tasks.md): parallel task cards for sub-agents
+- [Decision log](docs/decisions.md): trade-offs and rationale
