@@ -185,7 +185,7 @@ This is the one firm requirement: the model will sometimes return garbage, and t
 | --- | --- | --- |
 | Q1 | Is the API key for GroqCloud (groq.com) or xAI Grok (x.ai)? | **Answered: GroqCloud.** A key was created and the model was tested on 2026-10-11. |
 | Q2 | Should quotes apply a markup over `unit_cost`? | No markup. Price equals `unit_cost`. |
-| Q3 | Which subdomain should the app live on? | `quotes.<your-domain>` |
+| Q3 | Which subdomain should the app live on? | **Answered:** `email-to-draft.apak.ca` |
 | Q4 | Should the default supplier favor price or lead time? Email 10 (AOG) suggests lead time sometimes matters more. | Price first, as in assumption 7. The rep overrides. |
 | Q5 | Should a low-confidence line be allowed in a saved draft without an explicit decision? | No. Save requires a decision on every Low line (REV-6). |
 | Q6 | The brief says that when a request exceeds stock "we can still quote it for however much we have". Does that mean quote the requested quantity and show the shortfall, or lower the quantity to what is on hand? | Quote the requested quantity, never capped (agreed scope). The rep can lower it by hand. |

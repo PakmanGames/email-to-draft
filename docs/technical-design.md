@@ -464,5 +464,5 @@ Develop against fixtures in `src/lib/contracts/fixtures.ts` (T0 provides a few `
 - Railway project with one Postgres database and one service built from this repo.
 - Pre-deploy command: `pnpm db:migrate`.
 - Inventory load is a one-off from a local machine, using the database's public connection URL: `DATABASE_URL=<public url> pnpm db:load mock_data/shared/inventory.csv`. The mock data stays out of git.
-- Custom domain: add `quotes.<domain>` to the Railway service, then add the CNAME Railway shows in Cloudflare DNS. If the record is proxied, Cloudflare SSL/TLS mode must be Full, not Flexible.
+- Custom domain: add `email-to-draft.apak.ca` to the Railway service, then add the CNAME Railway shows in Cloudflare DNS. If the record is proxied, Cloudflare SSL/TLS mode must be Full, not Flexible.
 - Secrets (`LLM_API_KEY`) live in Railway variables only.

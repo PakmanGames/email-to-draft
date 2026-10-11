@@ -152,11 +152,11 @@ Save calls `POST /api/quotes` with the extraction ID, and handles `ALREADY_SAVED
 
 **Owns:** `railway.json` (or `railway.toml`), deploy notes in `docs/deploy.md`.
 
-**Build:** technical design section 12.
+**Build:** technical design section 12. The Railway GitHub app already has access to the repo.
 Deploy the T0 skeleton first so the pipeline is proven early, then redeploy as tasks merge.
 Walk the user through any step that needs their accounts.
 
-**Done when:** `https://quotes.<domain>` serves the app over HTTPS, migrations run on deploy, inventory is loaded, and the extraction route reaches Groq with the production key.
+**Done when:** `https://email-to-draft.apak.ca` serves the app over HTTPS, migrations run on deploy, inventory is loaded, and the extraction route reaches Groq with the production key.
 
 ### T7. Integration and E2E (after T1 to T6)
 
