@@ -9,17 +9,17 @@ Severity is about the rep's experience: **High** blocks a task or shows a wrong 
 | ID | Title | Area | Severity | Status |
 | --- | --- | --- | --- | --- |
 | [KI-001](#ki-001-a-quantity-above-2147483647-fails-the-save-with-a-500) | A quantity above 2,147,483,647 fails the save with a 500 | Contracts, T4, T5 | Medium | Fixed |
-| [KI-002](#ki-002-two-save-rules-live-outside-the-contracts) | Two save rules live outside the contracts | Contracts, T5 | Medium | Open |
+| [KI-002](#ki-002-two-save-rules-live-outside-the-contracts) | Two save rules live outside the contracts | Contracts, T4, T5 | Medium | Open |
 | [KI-003](#ki-003-offer_missing-wins-over-already_saved-on-a-retry) | `OFFER_MISSING` wins over `ALREADY_SAVED` on a retry | T5 | Low | Open |
 | [KI-004](#ki-004-an-unknown-draft-url-returns-http-200) | An unknown draft URL returns HTTP 200 | T5 | Low | Accepted |
 | [KI-005](#ki-005-saved-times-are-blank-until-the-page-hydrates) | Saved times are blank until the page hydrates | T5 | Low | Accepted |
 | [KI-006](#ki-006-no-automated-test-renders-the-quote-pages-from-the-database) | No automated test renders the quote pages from the database | T5, T7 | Low | Open |
 | [KI-007](#ki-007-description-candidates-can-all-share-one-description) | Description candidates can all share one description | T3 | Medium | Open |
 | [KI-008](#ki-008-extra-words-in-a-description-can-make-a-part-we-carry-show-as-not-in-inventory) | Extra words in a description can make a part we carry show as Not in inventory | T2, T3 | Medium | Open |
-| [KI-009](#ki-009-low-lines-have-no-default-supplier-for-their-candidates) | Low lines have no default supplier for their candidates | Contracts, T3, T4 | Medium | Open |
+| [KI-009](#ki-009-low-lines-have-no-default-supplier-for-their-candidates) | Low lines have no default supplier for their candidates | Contracts, T3, T4 | Medium | Fixed |
 | [KI-010](#ki-010-technical-design-section-7-doesnt-describe-three-matching-choices) | Technical design section 7 doesn't describe three matching choices | Docs, T3 | Low | Open |
 | [KI-011](#ki-011-the-500-ms-matching-budget-is-checked-by-hand) | The 500 ms matching budget is checked by hand | T3, T7 | Low | Open |
-| [KI-012](#ki-012-a-failure-after-the-model-answers-is-a-500-with-no-extraction-id) | A failure after the model answers is a 500 with no extraction ID | Contracts, T2 | Medium | Fixed |
+| [KI-012](#ki-012-a-failure-after-the-model-answers-is-a-500-with-no-extraction-id) | A failure after the model answers is a 500 with no extraction ID | Contracts, T2, T4 | Medium | Fixed |
 | [KI-013](#ki-013-a-malformed-extraction-request-answers-empty_input) | A malformed extraction request answers `EMPTY_INPUT` | Contracts, T2 | Low | Accepted |
 | [KI-014](#ki-014-an-email-with-a-nul-character-can-never-be-extracted) | An email with a NUL character can never be extracted | T2 | Medium | Fixed |
 
@@ -27,7 +27,7 @@ Severity is about the rep's experience: **High** blocks a task or shows a wrong 
 
 ### KI-001. A quantity above 2,147,483,647 fails the save with a 500
 
-**Status:** Fixed in the API (PR #9); the review screen still needs the same cap (T4). **Severity:** Medium. **Found in:** T5, PR #5.
+**Status:** Fixed in the API (PR #9) and the review screen (T4, PR #10). **Severity:** Medium. **Found in:** T5, PR #5.
 
 `SaveQuoteRequest.lines[].quantity` had no upper bound, but `quote_line.quantity` is a Postgres `integer`.
 A larger quantity passed validation, then the insert failed and `POST /api/quotes` answered 500 with no body, on every retry.
@@ -35,21 +35,28 @@ Extraction doesn't bound quantities either, so an injected "qty 99999999999" or 
 
 **Fix:** `MAX_LINE_QUANTITY` (2,147,483,647) in `src/lib/contracts/quote.ts` caps `quantity`, so the API answers 400 with an error that names the line, like `lines[1].quantity`.
 
-**Still open for T4:** the review screen's save gate (REV-6) should treat a quantity above `MAX_LINE_QUANTITY` like a quantity of 0, so the rep sees which line to fix before saving.
+**Fixed in T4:** the review screen's save gate (REV-6) treats a quantity above `MAX_LINE_QUANTITY` like a quantity of 0.
+The line counts as needing a quantity, so Save stays disabled and the rep fixes it before saving, the same as an empty quantity box.
 
 **Not fixed:** at the 1000% markup cap, a line at the maximum quantity of a part costing more than about $3,800 can push `total_cents` past `Number.MAX_SAFE_INTEGER`, so the stored total could be off by a few cents.
 The draft would already show a total in the hundreds of trillions of dollars, so this is left as is.
 
 ### KI-002. Two save rules live outside the contracts
 
-**Status:** Open. **Severity:** Medium. **Found in:** T5, PR #5.
+**Status:** Open for the contracts. The review screen follows both rules (T4, PR #10). **Severity:** Medium. **Found in:** T5, PR #5.
 
 1. A save line must have both `partNumber` and `supplier`, or neither. `SaveQuoteRequest` allows one without the other, so T5 enforces the rule with a local refinement (`SaveQuoteBody` in `src/lib/quotes/index.ts`), and the route answers 400.
 2. `POST /api/quotes` answers 400 for an invalid body and 404 for an unknown extraction, both with `{ error: string }`. Technical design 5.6 and `src/lib/contracts/api.ts` only describe the 201 and 409 bodies.
 
 A client built from the contracts alone (T4) can't know either rule.
 
+**Handled in T4:** a review line can only name a part and a supplier together, and a test checks the save requests it builds against `SaveQuoteBody`.
+The review screen reads the `{ error }` body of a 400 or 404 with its own schema in `src/components/review/save-draft.ts`.
+A 400 says the server rejected the draft and logs the server's reason, without offering a retry that would get the same answer.
+A 404 says the extraction no longer exists, links to the paste page, and stops further saves.
+
 **Proposed fix:** move the refinement into `SaveQuoteRequest`, add the 400 and 404 bodies to `api.ts` and technical design 5.6, then have T5 import them.
+T4 then replaces its local error schema with the contract one.
 
 ### KI-003. `OFFER_MISSING` wins over `ALREADY_SAVED` on a retry
 
@@ -119,15 +126,17 @@ Measure either one against the sample emails before choosing.
 
 ### KI-009. Low lines have no default supplier for their candidates
 
-**Status:** Open. **Severity:** Medium. **Found in:** T3, PR #8.
+**Status:** Fixed in T4, PR #10. **Severity:** Medium. **Found in:** T3, PR #8.
 
 `LineMatch` has one `defaultSupplier`, and matching sets it only for High lines, because a Low line has no chosen part yet.
 When the rep picks a candidate on a Low line, the review screen has to choose a supplier itself, or the line stays unpriced until the rep picks one.
 Likewise, when the rep changes the quantity on a High line, the default supplier and its reason ("Cheapest supplier that can fill 10") no longer match the new quantity.
 `pickDefaultSupplier(offers, quantityEach)` in `src/lib/matching/default-supplier.ts` is the same rule, pure and safe to import in client components.
 
-**Proposed fix:** T4 calls `pickDefaultSupplier` when the rep picks a candidate or changes the quantity, unless the rep already chose a supplier.
-The alternative is a default supplier on each `Candidate`, which is a contract change and still goes stale when the quantity changes.
+**Fix:** the review screen calls `pickDefaultSupplier` when the rep picks a candidate or a part found by search, and when the quantity changes, including through "Quote N on hand".
+Once the rep picks a supplier, a quantity change leaves it alone, so the line keeps the rep's choice.
+Each automatic pick shows its reason next to the supplier, so the reason always matches the current quantity.
+A default supplier on each `Candidate` was the alternative, but it is a contract change and still goes stale when the quantity changes.
 
 ### KI-010. Technical design section 7 doesn't describe three matching choices
 
@@ -155,7 +164,7 @@ If it's slower, scoring the 558 distinct descriptions once instead of all 12,000
 
 ### KI-012. A failure after the model answers is a 500 with no extraction ID
 
-**Status:** Fixed in T2, PR #7. **Severity:** Medium. **Found in:** T2, PR #7.
+**Status:** Fixed in T2, PR #7, and on the paste page (T4, PR #10). **Severity:** Medium. **Found in:** T2, PR #7.
 
 If `matchLines` or the final database write threw, `POST /api/extractions` marked the row `failed`, kept the model's attempts in it, and rethrew, so Next.js answered 500 with no JSON body.
 Without an extraction ID, the paste page couldn't offer Continue manually, which FAIL-5 requires.
@@ -165,7 +174,7 @@ Without an extraction ID, the paste page couldn't offer Continue manually, which
 The route catches any failure after input validation, logs it, and answers 500 `INTERNAL_ERROR` with the extraction ID.
 When the database allows it, the row is stored as `failed` with the model's attempts and the same zero-line `EXTRACTION_FAILED` seed as for other failures.
 Only a failed insert answers without an ID, since nothing was recorded.
-The paste page's per-code copy needs an entry for the new code.
+The paste page shows `INTERNAL_ERROR` as "Something went wrong on the server." with Retry, plus Continue manually when the answer has an extraction ID.
 
 ### KI-013. A malformed extraction request answers `EMPTY_INPUT`
 
