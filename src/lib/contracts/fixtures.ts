@@ -141,7 +141,8 @@ Purchasing, Northwind Avionics`,
 /**
  * (b) A reply chain that exercises every line state: high (line 0), low with three
  * candidates (line 1), none (line 2), short stock (line 3), a converted unit (line 4),
- * and a unit that can't be converted (line 5), plus a SUPERSEDED notice.
+ * a unit that can't be converted (line 5), and an exact match capped at Low only because
+ * of LINE_NOT_GROUNDED (line 6), plus a SUPERSEDED notice.
  */
 export const mixedEmail: ReviewFixture = {
   emailText: `Hi,
@@ -154,6 +155,8 @@ Updated list below. This replaces the one I sent Monday, we no longer need the M
 4. M39029/41-861 backshell x 50
 5. MS21044-243P screws, 2 boxes of 100
 6. M22759/13-12-3 wire, 3 spools
+7. Tube union 96F62405-7
+   qty 6, same as our last order
 
 Need these by end of month if possible.
 
@@ -385,6 +388,46 @@ Please quote:
           defaultPartNumber: "M22759/13-12-3",
           defaultSupplier: "Copperline Electronics",
           defaultSupplierReason: "Cheapest supplier. Quantity not confirmed yet",
+        },
+      },
+      {
+        // The model attached the part number from the line above to this quantity line.
+        extracted: {
+          index: 6,
+          sourceText: "qty 6, same as our last order",
+          partNumber: "96F62405-7",
+          nsn: null,
+          description: "Tube union",
+          quantityEach: 6,
+          quantityAsWritten: "6",
+          warnings: [
+            {
+              code: "LINE_NOT_GROUNDED",
+              message: "Part number 96F62405-7 isn't in this line's text. Confirm the quantity belongs to it.",
+            },
+          ],
+        },
+        match: {
+          confidence: "low",
+          reason: "Couldn't confirm this part number belongs to this line",
+          candidates: [
+            {
+              partNumber: "96F62405-7",
+              nsn: "4730-01-288-7855",
+              description: "UNION,TUBE TITANIUM",
+              kind: "part_number",
+              score: 1,
+              reason: "Exact part number match",
+              offers: [
+                { supplier: "Lakeshore Precision", qtyOnHand: 11, unitCostCents: 1479, leadTimeDays: 14 },
+                { supplier: "Frontier Turbine Parts", qtyOnHand: 15, unitCostCents: 1489, leadTimeDays: 120 },
+                { supplier: "Bay Aero Components", qtyOnHand: 59, unitCostCents: 1833, leadTimeDays: 35 },
+              ],
+            },
+          ],
+          defaultPartNumber: null,
+          defaultSupplier: null,
+          defaultSupplierReason: null,
         },
       },
     ],

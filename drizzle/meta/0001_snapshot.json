@@ -1,5 +1,5 @@
 {
-  "id": "a06f0c2a-5691-4a15-ace5-fbaa8e100bc2",
+  "id": "b3920741-3365-49d1-8072-d004f8466168",
   "prevId": "76ddf3e4-8f3e-47c8-ab1f-9b5c0b442fcc",
   "version": "7",
   "dialect": "postgresql",
@@ -292,7 +292,8 @@
           "name": "id",
           "type": "uuid",
           "primaryKey": true,
-          "notNull": true
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
         "created_at": {
           "name": "created_at",
@@ -305,7 +306,7 @@
           "name": "extraction_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "total_cents": {
           "name": "total_cents",
@@ -331,7 +332,15 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "quote_extraction_id_key": {
+          "name": "quote_extraction_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "extraction_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {
         "quote_total_cents_check": {
@@ -389,6 +398,12 @@
         },
         "match_reason": {
           "name": "match_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "suggested_part_number": {
+          "name": "suggested_part_number",
           "type": "text",
           "primaryKey": false,
           "notNull": false

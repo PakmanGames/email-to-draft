@@ -2,7 +2,7 @@
 import type { QuoteDetail, QuoteSummary, SaveQuoteRequest } from "@/lib/contracts";
 import { NotImplementedError } from "@/lib/not-implemented";
 
-/** Prices every line from inventory and saves the draft. Idempotent on `req.quoteId`. */
+/** Prices every line from inventory and saves the draft. One draft per `req.extractionId`. */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- stub until T5 lands
 export async function saveQuote(req: SaveQuoteRequest): Promise<{ quoteId: string; created: boolean }> {
   throw new NotImplementedError("saveQuote");

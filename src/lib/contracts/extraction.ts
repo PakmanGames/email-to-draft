@@ -56,6 +56,7 @@ export const LineWarningCode = z.enum([
   "QTY_NOT_IN_TEXT", // quantity number not found in source_text
   "IDENTIFIER_DROPPED", // part number or NSN not found in the email, removed
   "NSN_INVALID", // NSN-like text that doesn't normalize to 13 digits
+  "LINE_NOT_GROUNDED", // source_text not in the email, or its identifiers not in source_text
 ]);
 export type LineWarningCode = z.infer<typeof LineWarningCode>;
 

@@ -44,13 +44,19 @@ export type CreateExtractionResponse = z.infer<typeof CreateExtractionResponse>;
 export const SearchPartsResponse = z.strictObject({ candidates: z.array(Candidate) });
 export type SearchPartsResponse = z.infer<typeof SearchPartsResponse>;
 
-/** 201 (created) or 200 (already saved) body of POST /api/quotes. */
+/** 201 body of POST /api/quotes. */
 export const SaveQuoteResponse = z.strictObject({ quoteId: z.uuid() });
 export type SaveQuoteResponse = z.infer<typeof SaveQuoteResponse>;
 
-/** 409 body of POST /api/quotes: these lines' offers no longer exist in inventory. */
-export const SaveQuoteConflict = z.strictObject({
-  error: z.string(),
-  linePositions: z.array(z.number().int().nonnegative()),
-});
+/**
+ * 409 body of POST /api/quotes: this extraction already has a draft, or some lines'
+ * offers no longer exist in inventory.
+ */
+export const SaveQuoteConflict = z.discriminatedUnion("code", [
+  z.strictObject({ code: z.literal("ALREADY_SAVED"), quoteId: z.uuid() }),
+  z.strictObject({
+    code: z.literal("OFFER_MISSING"),
+    linePositions: z.array(z.number().int().nonnegative()),
+  }),
+]);
 export type SaveQuoteConflict = z.infer<typeof SaveQuoteConflict>;

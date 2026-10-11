@@ -36,10 +36,11 @@ CREATE TABLE "part" (
 );
 --> statement-breakpoint
 CREATE TABLE "quote" (
-	"id" uuid PRIMARY KEY NOT NULL,
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"extraction_id" uuid,
+	"extraction_id" uuid NOT NULL,
 	"total_cents" bigint NOT NULL,
+	CONSTRAINT "quote_extraction_id_key" UNIQUE("extraction_id"),
 	CONSTRAINT "quote_total_cents_check" CHECK (total_cents >= 0)
 );
 --> statement-breakpoint
@@ -52,6 +53,7 @@ CREATE TABLE "quote_line" (
 	"quantity" integer NOT NULL,
 	"match_confidence" text,
 	"match_reason" text,
+	"suggested_part_number" text,
 	"part_number" text,
 	"description" text,
 	"supplier" text,

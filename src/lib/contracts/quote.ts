@@ -6,8 +6,7 @@ export type LineOrigin = z.infer<typeof LineOrigin>;
 
 // Technical design 5.6: body of POST /api/quotes and the input to `saveQuote`.
 export const SaveQuoteRequest = z.strictObject({
-  quoteId: z.uuid(), // generated when the review page opens
-  extractionId: z.uuid().nullable(),
+  extractionId: z.uuid(), // one draft per extraction
   lines: z
     .array(
       z.strictObject({
@@ -17,6 +16,7 @@ export const SaveQuoteRequest = z.strictObject({
         quantity: z.number().int().positive(),
         matchConfidence: Confidence.nullable(),
         matchReason: z.string().nullable(),
+        suggestedPartNumber: z.string().nullable(), // what matching preselected, for metric G4
         // Both null for an unmatched line. No price field: the server prices from inventory.
         partNumber: z.string().nullable(),
         supplier: z.string().nullable(),
@@ -48,6 +48,7 @@ export const QuoteLine = z.strictObject({
   quantity: z.number().int().positive(),
   matchConfidence: Confidence.nullable(),
   matchReason: z.string().nullable(),
+  suggestedPartNumber: z.string().nullable(),
   partNumber: z.string().nullable(),
   description: z.string().nullable(),
   supplier: z.string().nullable(),
@@ -61,7 +62,7 @@ export type QuoteLine = z.infer<typeof QuoteLine>;
 export const QuoteDetail = z.strictObject({
   id: z.uuid(),
   createdAt: z.date(),
-  extractionId: z.uuid().nullable(),
+  extractionId: z.uuid(),
   totalCents: z.number().int().nonnegative(),
   lines: z.array(QuoteLine),
 });
