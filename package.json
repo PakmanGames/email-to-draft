@@ -15,7 +15,7 @@
     "db:up": "docker compose up -d --wait",
     "db:migrate": "drizzle-kit migrate",
     "db:generate": "drizzle-kit generate",
-    "db:load": "tsx scripts/load-inventory.ts"
+    "db:load": "tsx --env-file-if-exists=.env scripts/load-inventory.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
