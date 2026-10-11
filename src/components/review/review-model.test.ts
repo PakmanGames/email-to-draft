@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { Candidate } from "@/lib/contracts";
+import { MAX_LINE_QUANTITY, type Candidate } from "@/lib/contracts";
 import { reviewFixtures } from "@/lib/contracts/fixtures";
 import { unitPriceCents } from "@/lib/pricing";
+// The schema POST /api/quotes validates with, so these tests check what the server accepts.
+import { SaveQuoteBody } from "@/lib/quotes";
 import {
   buildSaveRequest,
   describeBlockers,
@@ -137,6 +139,25 @@ describe("reviewReducer", () => {
     expect(views[6].quantityIssue).toBeNull();
   });
 
+  it("re-picks the supplier of a picked candidate when the quantity changes (KI-009)", () => {
+    const [, second] = mixed.lines[1].match.candidates;
+    const line = run(
+      initial,
+      { type: "pickPart", key: "x1", candidate: second },
+      { type: "setQuantity", key: "x1", text: "9" },
+    ).lines[1];
+    // At 9 both offers can fill, so the cheaper one wins over the one with more on hand.
+    expect(line.selection).toMatchObject({ partNumber: "MS29513-032", supplier: "Riverside Precision Bolt" });
+    expect(line.supplierReason).toBe("Cheapest supplier that can fill 9");
+  });
+
+  it("re-picks an automatic supplier even when matching gave no reason for it", () => {
+    const seed = structuredClone(mixed);
+    seed.lines[4].match.defaultSupplierReason = null;
+    const line = run(initReviewState(seed), { type: "setQuantity", key: "x4", text: "300" }).lines[4];
+    expect(line.selection).toMatchObject({ supplier: "Bridgewater Avionics" });
+  });
+
   it("re-picks the automatic supplier for a new quantity, and keeps one the rep chose", () => {
     const automatic = derive(run(initial, { type: "setQuantity", key: "x4", text: "300" })).views[4];
     expect(automatic.line.selection).toMatchObject({ supplier: "Bridgewater Avionics" });
@@ -149,6 +170,17 @@ describe("reviewReducer", () => {
     ).lines[4];
     expect(chosen.selection).toMatchObject({ supplier: "Orion Microcircuits" });
     expect(chosen.supplierReason).toBeNull();
+  });
+
+  it("blocks a quantity above MAX_LINE_QUANTITY the same way as a quantity of 0 (KI-001)", () => {
+    for (const text of ["0", String(MAX_LINE_QUANTITY + 1)]) {
+      const { views, summary } = derive(run(initial, { type: "setQuantity", key: "x0", text }));
+      expect(views[0].quantityIssue).toBe("missing");
+      expect(summary.blockers.needQuantity).toBe(2);
+      expect(summary.firstBlocked).toEqual({ key: "x0", number: 1, target: "quantity" });
+    }
+    const atMax = derive(run(initial, { type: "setQuantity", key: "x0", text: String(MAX_LINE_QUANTITY) }));
+    expect(atMax.views[0].quantity).toBe(MAX_LINE_QUANTITY);
   });
 
   it("does not count typing the original quantity back as an edit", () => {
@@ -261,5 +293,28 @@ describe("buildSaveRequest", () => {
     });
     expect(request.lines[0].suggestedPartNumber).toBe("AL14720-1");
     expect(JSON.stringify(request)).not.toMatch(/price|cost/i);
+  });
+
+  it("names a part and a supplier together or neither, as the server requires (KI-002)", () => {
+    const [first] = mixed.lines[1].match.candidates;
+    const state = run(
+      initReviewState(mixed),
+      { type: "pickPart", key: "x1", candidate: first },
+      { type: "pickSupplier", key: "x1", supplier: "Delta Wire & Cable" },
+      { type: "setQuantity", key: "x5", text: "3" },
+      { type: "pickPart", key: "x6", candidate: mixed.lines[6].match.candidates[0] },
+      { type: "keepUnmatched", key: "x6" },
+      { type: "confirmQuantity", key: "x6" },
+      { type: "addLine", requestedText: "washers", candidate: searched },
+      { type: "setQuantity", key: "m0", text: "100" },
+      { type: "addLine", requestedText: "Bracket per drawing 7", candidate: null },
+      { type: "setQuantity", key: "m1", text: "2" },
+    );
+    const { views, summary } = derive(state);
+    expect(summary.canSave).toBe(true);
+
+    const request = buildSaveRequest("00000000-0000-4000-8000-000000000002", state, views);
+    for (const line of request.lines) expect(line.partNumber === null).toBe(line.supplier === null);
+    expect(SaveQuoteBody.safeParse(request).success).toBe(true);
   });
 });

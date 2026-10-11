@@ -44,6 +44,8 @@ export type ReviewLine = {
   selection: Selection | null;
   /** Why the selected supplier was picked, while it is still the automatic pick. */
   supplierReason: string | null;
+  /** The rep picked the supplier, so quantity changes no longer re-pick it (KI-009). */
+  supplierChosen: boolean;
   /** Raw input, so a half-typed or cleared field stays as the rep left it. */
   quantityText: string;
   /** The rep confirmed or edited a quantity that extraction flagged. */
@@ -127,6 +129,7 @@ export function initReviewState(seed: ReviewSeed): ReviewState {
         candidates: line.match.candidates,
         selection,
         supplierReason: selection?.kind === "part" ? line.match.defaultSupplierReason : null,
+        supplierChosen: false,
         quantityText: line.extracted.quantityEach?.toString() ?? "",
         quantityConfirmed: false,
       };
@@ -161,6 +164,7 @@ function withPart(line: ReviewLine, candidate: Candidate): ReviewLine {
     candidates: known ? line.candidates : [...line.candidates, candidate],
     selection: { kind: "part", partNumber: candidate.partNumber, supplier },
     supplierReason: reason,
+    supplierChosen: false,
   };
 }
 
@@ -173,7 +177,7 @@ function withQuantity(line: ReviewLine, text: string): ReviewLine {
   const next = { ...line, quantityText: text, quantityConfirmed: true };
   const part = selectedPart(line);
   const quantity = parseQuantity(text);
-  if (!part || line.supplierReason === null || quantity === null) return next;
+  if (!part || line.supplierChosen || quantity === null) return next;
   const { supplier, reason } = pickDefaultSupplier(part.offers, quantity);
   return { ...next, selection: { kind: "part", partNumber: part.partNumber, supplier }, supplierReason: reason };
 }
@@ -199,11 +203,21 @@ export function reviewReducer(state: ReviewState, action: ReviewAction): ReviewS
     case "pickSupplier":
       return updateLine(state, action.key, (line) =>
         line.selection?.kind === "part"
-          ? { ...line, selection: { ...line.selection, supplier: action.supplier }, supplierReason: null }
+          ? {
+              ...line,
+              selection: { ...line.selection, supplier: action.supplier },
+              supplierReason: null,
+              supplierChosen: true,
+            }
           : line,
       );
     case "keepUnmatched":
-      return updateLine(state, action.key, (line) => ({ ...line, selection: { kind: "unmatched" }, supplierReason: null }));
+      return updateLine(state, action.key, (line) => ({
+        ...line,
+        selection: { kind: "unmatched" },
+        supplierReason: null,
+        supplierChosen: false,
+      }));
     case "removeLine":
       return { ...state, lines: state.lines.filter((line) => line.key !== action.key) };
     case "addLine": {
@@ -214,6 +228,7 @@ export function reviewReducer(state: ReviewState, action: ReviewAction): ReviewS
         candidates: [],
         selection: { kind: "unmatched" },
         supplierReason: null,
+        supplierChosen: false,
         quantityText: "",
         quantityConfirmed: false,
       };
