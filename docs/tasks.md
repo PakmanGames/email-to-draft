@@ -164,7 +164,9 @@ Save calls `POST /api/quotes` with the extraction ID, and handles `ALREADY_SAVED
 
 ### T6. Deploy (needs the user for Railway and Cloudflare access)
 
-**Owns:** `railway.json` (or `railway.toml`), deploy notes in `docs/deploy.md`.
+**Status:** Infrastructure live. See [deploy.md](deploy.md).
+
+**Owns:** `.railway/railway.ts`, `docs/deploy.md`. Railway's `railway.json` and `railway.toml` are deprecated and new services cannot use them (D-017).
 
 **Build:** technical design section 12. The Railway GitHub app already has access to the repo.
 Deploy the T0 skeleton first so the pipeline is proven early, then redeploy as tasks merge.
