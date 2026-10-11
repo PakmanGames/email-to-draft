@@ -25,6 +25,7 @@ export type ExtractionError = z.infer<typeof ExtractionError>;
 /**
  * 200 with `ok: true`, or 4xx/5xx with `ok: false`. `extractionId` is non-null for every
  * failure after input validation, so "Continue manually" can always open the review page.
+ * The one exception is an `INTERNAL_ERROR` that stopped the extraction row being written.
  */
 export const CreateExtractionResponse = z.discriminatedUnion("ok", [
   z.strictObject({

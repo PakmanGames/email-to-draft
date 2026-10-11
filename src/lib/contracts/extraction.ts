@@ -102,6 +102,7 @@ export const ExtractionErrorCode = z.enum([
   "SCHEMA_MISMATCH",
   "TRUNCATED",
   "CANCELLED",
+  "INTERNAL_ERROR", // a failure past the model, such as matching or the database write
 ]);
 export type ExtractionErrorCode = z.infer<typeof ExtractionErrorCode>;
 

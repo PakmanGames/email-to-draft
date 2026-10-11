@@ -19,6 +19,9 @@ Severity is about the rep's experience: **High** blocks a task or shows a wrong 
 | [KI-009](#ki-009-low-lines-have-no-default-supplier-for-their-candidates) | Low lines have no default supplier for their candidates | Contracts, T3, T4 | Medium | Open |
 | [KI-010](#ki-010-technical-design-section-7-doesnt-describe-three-matching-choices) | Technical design section 7 doesn't describe three matching choices | Docs, T3 | Low | Open |
 | [KI-011](#ki-011-the-500-ms-matching-budget-is-checked-by-hand) | The 500 ms matching budget is checked by hand | T3, T7 | Low | Open |
+| [KI-012](#ki-012-a-failure-after-the-model-answers-is-a-500-with-no-extraction-id) | A failure after the model answers is a 500 with no extraction ID | Contracts, T2 | Medium | Fixed |
+| [KI-013](#ki-013-a-malformed-extraction-request-answers-empty_input) | A malformed extraction request answers `EMPTY_INPUT` | Contracts, T2 | Low | Accepted |
+| [KI-014](#ki-014-an-email-with-a-nul-character-can-never-be-extracted) | An email with a NUL character can never be extracted | T2 | Medium | Fixed |
 
 ---
 
@@ -149,3 +152,37 @@ Production runs Postgres 18 on Railway, where the timing hasn't been measured.
 If it's slower, scoring the 558 distinct descriptions once instead of all 12,000 parts measured 84 ms for the same worst case.
 
 **Proposed fix:** T7 times `matchLines` in `pnpm eval:emails` or on the deployed app.
+
+### KI-012. A failure after the model answers is a 500 with no extraction ID
+
+**Status:** Fixed in T2, PR #7. **Severity:** Medium. **Found in:** T2, PR #7.
+
+If `matchLines` or the final database write threw, `POST /api/extractions` marked the row `failed`, kept the model's attempts in it, and rethrew, so Next.js answered 500 with no JSON body.
+Without an extraction ID, the paste page couldn't offer Continue manually, which FAIL-5 requires.
+`ExtractionErrorCode` had no code for a failure past the model, so the route had nothing typed to answer with.
+
+**Fix:** `ExtractionErrorCode` has a new `INTERNAL_ERROR` code (contracts and technical design 5.5).
+The route catches any failure after input validation, logs it, and answers 500 `INTERNAL_ERROR` with the extraction ID.
+When the database allows it, the row is stored as `failed` with the model's attempts and the same zero-line `EXTRACTION_FAILED` seed as for other failures.
+Only a failed insert answers without an ID, since nothing was recorded.
+The paste page's per-code copy needs an entry for the new code.
+
+### KI-013. A malformed extraction request answers `EMPTY_INPUT`
+
+**Status:** Accepted. **Severity:** Low. **Found in:** T2, PR #7.
+
+A `POST /api/extractions` body that isn't JSON, or has no `emailText` string, is treated as an email with no text and answers 400 `EMPTY_INPUT`.
+`ExtractionErrorCode` has no code for a malformed request.
+
+**Reason for accepting:** the only client is the paste page, which always sends `{ emailText }`, and the answer is still a typed 400.
+Technical design 6, step 1 documents it.
+
+### KI-014. An email with a NUL character can never be extracted
+
+**Status:** Fixed in T2, PR #7. **Severity:** Medium. **Found in:** T2, PR #7.
+
+Postgres `text` can't store a NUL character (`invalid byte sequence for encoding "UTF8": 0x00`), so inserting the extraction row failed for any email containing one, and every retry failed the same way.
+Nothing was recorded, so there was no Continue manually, and the rep can't see the character to delete it.
+Text copied from some PDFs and older systems can carry one.
+
+**Fix:** `POST /api/extractions` drops NUL characters along with the surrounding whitespace before validating, so the email is extracted normally (technical design 6, step 1).
