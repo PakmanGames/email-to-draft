@@ -96,10 +96,12 @@ export const quote = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     // One draft per extraction. Makes Save idempotent across double clicks, retries, and a second tab.
     extractionId: uuid("extraction_id").notNull().unique("quote_extraction_id_key"),
+    markupBps: integer("markup_bps").notNull(), // 2500 = 25%; one markup per draft
     totalCents: bigint("total_cents", { mode: "number" }).notNull(),
   },
   (t) => [
     foreignKey({ name: "quote_extraction_id_fkey", columns: [t.extractionId], foreignColumns: [extraction.id] }),
+    check("quote_markup_bps_check", sql`markup_bps BETWEEN 0 AND 100000`),
     check("quote_total_cents_check", sql`total_cents >= 0`),
   ],
 );
@@ -120,7 +122,8 @@ export const quoteLine = pgTable(
     partNumber: text("part_number"),
     description: text("description"),
     supplier: text("supplier"),
-    unitPriceCents: integer("unit_price_cents"),
+    unitCostCents: integer("unit_cost_cents"),
+    unitPriceCents: integer("unit_price_cents"), // cost plus the draft's markup
     qtyOnHand: integer("qty_on_hand"),
     leadTimeDays: integer("lead_time_days"),
   },
@@ -131,13 +134,16 @@ export const quoteLine = pgTable(
     check("quote_line_origin_check", sql`origin IN ('extracted', 'manual')`),
     check("quote_line_quantity_check", sql`quantity > 0`),
     check("quote_line_match_confidence_check", sql`match_confidence IN ('high', 'low', 'none')`),
+    check("quote_line_unit_cost_cents_check", sql`unit_cost_cents > 0`),
     check("quote_line_unit_price_cents_check", sql`unit_price_cents > 0`),
     check("quote_line_qty_on_hand_check", sql`qty_on_hand >= 0`),
     check("quote_line_lead_time_days_check", sql`lead_time_days >= 0`),
     // A line is either fully priced from an offer or fully unmatched.
     check(
       "quote_line_snapshot_check",
-      sql`(part_number IS NULL AND supplier IS NULL AND unit_price_cents IS NULL AND qty_on_hand IS NULL AND lead_time_days IS NULL) OR (part_number IS NOT NULL AND supplier IS NOT NULL AND unit_price_cents IS NOT NULL AND qty_on_hand IS NOT NULL AND lead_time_days IS NOT NULL)`,
+      sql`(part_number IS NULL AND supplier IS NULL AND unit_cost_cents IS NULL AND unit_price_cents IS NULL AND qty_on_hand IS NULL AND lead_time_days IS NULL) OR (part_number IS NOT NULL AND supplier IS NOT NULL AND unit_cost_cents IS NOT NULL AND unit_price_cents IS NOT NULL AND qty_on_hand IS NOT NULL AND lead_time_days IS NOT NULL)`,
     ),
+    // Markup is never negative, so a line never sells below cost.
+    check("quote_line_price_not_below_cost_check", sql`unit_price_cents >= unit_cost_cents`),
   ],
 );

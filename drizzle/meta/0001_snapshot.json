@@ -1,5 +1,5 @@
 {
-  "id": "b3920741-3365-49d1-8072-d004f8466168",
+  "id": "1103be2f-128e-4f27-b183-409307a33a55",
   "prevId": "76ddf3e4-8f3e-47c8-ab1f-9b5c0b442fcc",
   "version": "7",
   "dialect": "postgresql",
@@ -308,6 +308,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "markup_bps": {
+          "name": "markup_bps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
         "total_cents": {
           "name": "total_cents",
           "type": "bigint",
@@ -343,6 +349,10 @@
       },
       "policies": {},
       "checkConstraints": {
+        "quote_markup_bps_check": {
+          "name": "quote_markup_bps_check",
+          "value": "markup_bps BETWEEN 0 AND 100000"
+        },
         "quote_total_cents_check": {
           "name": "quote_total_cents_check",
           "value": "total_cents >= 0"
@@ -426,6 +436,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "unit_cost_cents": {
+          "name": "unit_cost_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "unit_price_cents": {
           "name": "unit_price_cents",
           "type": "integer",
@@ -489,6 +505,10 @@
           "name": "quote_line_match_confidence_check",
           "value": "match_confidence IN ('high', 'low', 'none')"
         },
+        "quote_line_unit_cost_cents_check": {
+          "name": "quote_line_unit_cost_cents_check",
+          "value": "unit_cost_cents > 0"
+        },
         "quote_line_unit_price_cents_check": {
           "name": "quote_line_unit_price_cents_check",
           "value": "unit_price_cents > 0"
@@ -503,7 +523,11 @@
         },
         "quote_line_snapshot_check": {
           "name": "quote_line_snapshot_check",
-          "value": "(part_number IS NULL AND supplier IS NULL AND unit_price_cents IS NULL AND qty_on_hand IS NULL AND lead_time_days IS NULL) OR (part_number IS NOT NULL AND supplier IS NOT NULL AND unit_price_cents IS NOT NULL AND qty_on_hand IS NOT NULL AND lead_time_days IS NOT NULL)"
+          "value": "(part_number IS NULL AND supplier IS NULL AND unit_cost_cents IS NULL AND unit_price_cents IS NULL AND qty_on_hand IS NULL AND lead_time_days IS NULL) OR (part_number IS NOT NULL AND supplier IS NOT NULL AND unit_cost_cents IS NOT NULL AND unit_price_cents IS NOT NULL AND qty_on_hand IS NOT NULL AND lead_time_days IS NOT NULL)"
+        },
+        "quote_line_price_not_below_cost_check": {
+          "name": "quote_line_price_not_below_cost_check",
+          "value": "unit_price_cents >= unit_cost_cents"
         }
       },
       "isRLSEnabled": false

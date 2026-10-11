@@ -7,6 +7,7 @@ export type LineOrigin = z.infer<typeof LineOrigin>;
 // Technical design 5.6: body of POST /api/quotes and the input to `saveQuote`.
 export const SaveQuoteRequest = z.strictObject({
   extractionId: z.uuid(), // one draft per extraction
+  markupBps: z.number().int().min(0).max(100000), // 2500 = 25%
   lines: z
     .array(
       z.strictObject({
@@ -17,7 +18,7 @@ export const SaveQuoteRequest = z.strictObject({
         matchConfidence: Confidence.nullable(),
         matchReason: z.string().nullable(),
         suggestedPartNumber: z.string().nullable(), // what matching preselected, for metric G4
-        // Both null for an unmatched line. No price field: the server prices from inventory.
+        // Both null for an unmatched line. No price field: the server prices from inventory cost and markupBps.
         partNumber: z.string().nullable(),
         supplier: z.string().nullable(),
       }),
@@ -35,6 +36,8 @@ export const QuoteSummary = z.strictObject({
   createdAt: z.date(),
   lineCount: z.number().int().nonnegative(),
   unmatchedCount: z.number().int().nonnegative(),
+  shortStockCount: z.number().int().nonnegative(), // lines where quantity > qtyOnHand
+  markupBps: z.number().int().min(0).max(100000),
   totalCents: z.number().int().nonnegative(),
 });
 export type QuoteSummary = z.infer<typeof QuoteSummary>;
@@ -52,7 +55,8 @@ export const QuoteLine = z.strictObject({
   partNumber: z.string().nullable(),
   description: z.string().nullable(),
   supplier: z.string().nullable(),
-  unitPriceCents: z.number().int().positive().nullable(),
+  unitCostCents: z.number().int().positive().nullable(),
+  unitPriceCents: z.number().int().positive().nullable(), // cost plus the draft's markup
   qtyOnHand: z.number().int().nonnegative().nullable(),
   leadTimeDays: z.number().int().nonnegative().nullable(),
 });
@@ -63,6 +67,7 @@ export const QuoteDetail = z.strictObject({
   id: z.uuid(),
   createdAt: z.date(),
   extractionId: z.uuid(),
+  markupBps: z.number().int().min(0).max(100000),
   totalCents: z.number().int().nonnegative(),
   lines: z.array(QuoteLine),
 });
