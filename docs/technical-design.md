@@ -473,8 +473,12 @@ Develop against fixtures in `src/lib/contracts/fixtures.ts` (T0 provides a few `
 
 ## 12. Deployment (T6)
 
-- Railway project with one Postgres database and one service built from this repo.
-- Pre-deploy command: `pnpm db:migrate`.
-- Inventory load is a one-off from a local machine, using the database's public connection URL: `DATABASE_URL=<public url> pnpm db:load mock_data/shared/inventory.csv`. The mock data stays out of git.
-- Custom domain: add `email-to-draft.apak.ca` to the Railway service, then add the CNAME Railway shows in Cloudflare DNS. If the record is proxied, Cloudflare SSL/TLS mode must be Full, not Flexible.
+The runbook is [deploy.md](deploy.md). In short:
+
+- Railway project `email-to-draft` with a `web` service (this repo, auto-deploys on every push to `main`) and a `postgres` database (Railway Postgres 18).
+- Declared in `.railway/railway.ts` with Railway's Infrastructure as Code, applied with `railway config apply` (D-017).
+- Build with Railpack (Node 24 from `engines`, pnpm 12 from `packageManager`), pre-deploy `pnpm db:migrate`, start `pnpm start`, healthcheck `GET /`.
+- Postgres has no public endpoint. Inventory is loaded from inside the `web` container over the private network (D-018). The mock data stays out of git.
+- The database is unreachable during builds, so no page may query it while being prerendered.
+- `email-to-draft.apak.ca` is attached with `railway domain` (IaC cannot declare custom domains yet) and points at Railway with a DNS-only CNAME in Cloudflare.
 - Secrets (`LLM_API_KEY`) live in Railway variables only.

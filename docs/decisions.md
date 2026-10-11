@@ -179,3 +179,27 @@ Status values: **Accepted**, **Proposed** (waiting on an open question in the PR
 **Alternatives:** No markup (price equals cost); a fixed markup the rep cannot change; letting the rep type prices.
 
 **Trade-off:** The 25% default is our assumption, not the brief's. Per-line overrides are deferred to P1. Sharing one pricing function means the price the rep sees is exactly the price saved.
+
+### D-017. Railway Infrastructure as Code instead of railway.json
+
+**Status:** Accepted
+
+**Context:** The task plan called for a `railway.json`. Railway has since deprecated config as code: new services cannot use it, and existing files stop working on 2026-12-01.
+
+**Decision:** Declare the project in `.railway/railway.ts` with Railway's TypeScript SDK and apply it with `railway config apply`. The custom domain is attached with the CLI, because IaC cannot register custom domains yet.
+
+**Alternatives:** `railway.json` (not available for new services); settings made by hand in the dashboard (not reviewable, and drift silently).
+
+**Trade-off:** The file is applied by hand, not on deploy, so a change to it does nothing until someone applies it. In return the whole project (services, database, commands, variables) is reviewable in git, and `railway config plan` shows drift.
+
+### D-018. Postgres stays private, and inventory loads from inside the app container
+
+**Status:** Accepted
+
+**Context:** The original plan loaded inventory from a laptop over the database's public URL. Railway creates databases without a public endpoint, and opening one, even briefly, exposes the database to the internet.
+
+**Decision:** Keep Postgres reachable only on Railway's private network. Load inventory by copying the CSV into the running `web` container and running `pnpm db:load` there over SSH.
+
+**Alternatives:** A temporary public TCP proxy; committing the CSV and loading it during deploy.
+
+**Trade-off:** Loading needs an SSH key registered with Railway, which is a one-time step. The database is never on the public internet, and a leaked database password is useless outside Railway.
