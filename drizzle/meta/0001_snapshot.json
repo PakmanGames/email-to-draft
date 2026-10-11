@@ -1,0 +1,547 @@
+{
+  "id": "1103be2f-128e-4f27-b183-409307a33a55",
+  "prevId": "76ddf3e4-8f3e-47c8-ab1f-9b5c0b442fcc",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.extraction": {
+      "name": "extraction",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "email_text": {
+          "name": "email_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "prompt_version": {
+          "name": "prompt_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "result": {
+          "name": "result",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "duration_ms": {
+          "name": "duration_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "extraction_status_check": {
+          "name": "extraction_status_check",
+          "value": "status IN ('pending', 'succeeded', 'no_items', 'failed')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.offer": {
+      "name": "offer",
+      "schema": "",
+      "columns": {
+        "part_number": {
+          "name": "part_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "supplier": {
+          "name": "supplier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "qty_on_hand": {
+          "name": "qty_on_hand",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unit_cost": {
+          "name": "unit_cost",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lead_time_days": {
+          "name": "lead_time_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "offer_part_number_fkey": {
+          "name": "offer_part_number_fkey",
+          "tableFrom": "offer",
+          "tableTo": "part",
+          "columnsFrom": [
+            "part_number"
+          ],
+          "columnsTo": [
+            "part_number"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "offer_pkey": {
+          "name": "offer_pkey",
+          "columns": [
+            "part_number",
+            "supplier"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "offer_supplier_check": {
+          "name": "offer_supplier_check",
+          "value": "supplier <> ''"
+        },
+        "offer_qty_on_hand_check": {
+          "name": "offer_qty_on_hand_check",
+          "value": "qty_on_hand >= 0"
+        },
+        "offer_unit_cost_check": {
+          "name": "offer_unit_cost_check",
+          "value": "unit_cost > 0"
+        },
+        "offer_lead_time_days_check": {
+          "name": "offer_lead_time_days_check",
+          "value": "lead_time_days >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.part": {
+      "name": "part",
+      "schema": "",
+      "columns": {
+        "part_number": {
+          "name": "part_number",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "part_number_key": {
+          "name": "part_number_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "generated": {
+            "as": "regexp_replace(upper(part_number), '[^A-Z0-9]', '', 'g')",
+            "type": "stored"
+          }
+        },
+        "nsn": {
+          "name": "nsn",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "part_key_idx": {
+          "name": "part_key_idx",
+          "columns": [
+            {
+              "expression": "part_number_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "part_nsn_idx": {
+          "name": "part_nsn_idx",
+          "columns": [
+            {
+              "expression": "nsn",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "part_key_trgm_idx": {
+          "name": "part_key_trgm_idx",
+          "columns": [
+            {
+              "expression": "part_number_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last",
+              "opclass": "gin_trgm_ops"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
+        },
+        "part_desc_trgm_idx": {
+          "name": "part_desc_trgm_idx",
+          "columns": [
+            {
+              "expression": "description",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last",
+              "opclass": "gin_trgm_ops"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "gin",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "part_part_number_check": {
+          "name": "part_part_number_check",
+          "value": "part_number <> '' AND part_number = btrim(part_number)"
+        },
+        "part_nsn_check": {
+          "name": "part_nsn_check",
+          "value": "nsn ~ '^[0-9]{4}-[0-9]{2}-[0-9]{3}-[0-9]{4}$'"
+        },
+        "part_description_check": {
+          "name": "part_description_check",
+          "value": "description <> ''"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.quote": {
+      "name": "quote",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "extraction_id": {
+          "name": "extraction_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "markup_bps": {
+          "name": "markup_bps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "total_cents": {
+          "name": "total_cents",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "quote_extraction_id_fkey": {
+          "name": "quote_extraction_id_fkey",
+          "tableFrom": "quote",
+          "tableTo": "extraction",
+          "columnsFrom": [
+            "extraction_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "quote_extraction_id_key": {
+          "name": "quote_extraction_id_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "extraction_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "quote_markup_bps_check": {
+          "name": "quote_markup_bps_check",
+          "value": "markup_bps BETWEEN 0 AND 100000"
+        },
+        "quote_total_cents_check": {
+          "name": "quote_total_cents_check",
+          "value": "total_cents >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.quote_line": {
+      "name": "quote_line",
+      "schema": "",
+      "columns": {
+        "quote_id": {
+          "name": "quote_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "origin": {
+          "name": "origin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "edited": {
+          "name": "edited",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "requested_text": {
+          "name": "requested_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "match_confidence": {
+          "name": "match_confidence",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "match_reason": {
+          "name": "match_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "suggested_part_number": {
+          "name": "suggested_part_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "part_number": {
+          "name": "part_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "supplier": {
+          "name": "supplier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unit_cost_cents": {
+          "name": "unit_cost_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unit_price_cents": {
+          "name": "unit_price_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "qty_on_hand": {
+          "name": "qty_on_hand",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lead_time_days": {
+          "name": "lead_time_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "quote_line_quote_id_fkey": {
+          "name": "quote_line_quote_id_fkey",
+          "tableFrom": "quote_line",
+          "tableTo": "quote",
+          "columnsFrom": [
+            "quote_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "quote_line_pkey": {
+          "name": "quote_line_pkey",
+          "columns": [
+            "quote_id",
+            "position"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "quote_line_position_check": {
+          "name": "quote_line_position_check",
+          "value": "position >= 0"
+        },
+        "quote_line_origin_check": {
+          "name": "quote_line_origin_check",
+          "value": "origin IN ('extracted', 'manual')"
+        },
+        "quote_line_quantity_check": {
+          "name": "quote_line_quantity_check",
+          "value": "quantity > 0"
+        },
+        "quote_line_match_confidence_check": {
+          "name": "quote_line_match_confidence_check",
+          "value": "match_confidence IN ('high', 'low', 'none')"
+        },
+        "quote_line_unit_cost_cents_check": {
+          "name": "quote_line_unit_cost_cents_check",
+          "value": "unit_cost_cents > 0"
+        },
+        "quote_line_unit_price_cents_check": {
+          "name": "quote_line_unit_price_cents_check",
+          "value": "unit_price_cents > 0"
+        },
+        "quote_line_qty_on_hand_check": {
+          "name": "quote_line_qty_on_hand_check",
+          "value": "qty_on_hand >= 0"
+        },
+        "quote_line_lead_time_days_check": {
+          "name": "quote_line_lead_time_days_check",
+          "value": "lead_time_days >= 0"
+        },
+        "quote_line_snapshot_check": {
+          "name": "quote_line_snapshot_check",
+          "value": "(part_number IS NULL AND supplier IS NULL AND unit_cost_cents IS NULL AND unit_price_cents IS NULL AND qty_on_hand IS NULL AND lead_time_days IS NULL) OR (part_number IS NOT NULL AND supplier IS NOT NULL AND unit_cost_cents IS NOT NULL AND unit_price_cents IS NOT NULL AND qty_on_hand IS NOT NULL AND lead_time_days IS NOT NULL)"
+        },
+        "quote_line_price_not_below_cost_check": {
+          "name": "quote_line_price_not_below_cost_check",
+          "value": "unit_price_cents >= unit_cost_cents"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}
