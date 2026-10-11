@@ -164,7 +164,7 @@ Save calls `POST /api/quotes` with the extraction ID, and handles `ALREADY_SAVED
 
 ### T6. Deploy (needs the user for Railway and Cloudflare access)
 
-**Status:** Live on Railway with inventory loaded. The custom domain is waiting on DNS. See [deploy.md](deploy.md).
+**Status:** Done. Live at https://email-to-draft.apak.ca with inventory loaded. See [deploy.md](deploy.md).
 
 **Owns:** `.railway/railway.ts`, `docs/deploy.md`. Railway's `railway.json` and `railway.toml` are deprecated and new services cannot use them (D-017).
 

@@ -88,6 +88,8 @@ It needs two records in the Cloudflare `apak.ca` zone:
 With DNS only, Railway issues and renews the TLS certificate itself.
 If the CNAME is ever proxied (orange cloud), the zone's SSL/TLS mode must be **Full**, not Flexible, or requests loop.
 Check progress with `railway domain status email-to-draft.apak.ca --service web`.
+The records were added on 2026-10-11, and Railway issued a Let's Encrypt certificate within minutes. Railway renews it automatically.
+Browsers that loaded the domain before the certificate existed can keep showing "Not Secure" on that tab until it is reopened.
 
 ## Logs
 
