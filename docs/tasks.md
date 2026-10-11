@@ -98,7 +98,7 @@ The route calls `matchLines` from `lib/matching` (a stub until T3 merges).
 
 **Done when:**
 
-- Unit tests using `FakeLlmClient` cover malformed JSON, schema mismatch, truncated output, hallucinated identifiers, `QTY_NOT_IN_TEXT`, each unit conversion case, no items, timeout, 429 with `retry-after`, and cancel.
+- Unit tests using `FakeLlmClient` cover malformed JSON, schema mismatch, truncated output, hallucinated identifiers, `LINE_NOT_GROUNDED` (a part number attached to another line's quantity), `QTY_NOT_IN_TEXT`, each unit conversion case, no items, timeout, 429 with `retry-after`, and cancel.
 - Every failure path returns a typed error and leaves an `extraction` row with its attempts.
 - A manual run against the real API extracts sample emails 01, 04, and 06 correctly.
 
@@ -111,7 +111,8 @@ Use a small fixture inventory inserted in tests, so this task does not depend on
 
 **Done when:**
 
-- Tests cover every row of the confidence table, including a shared NSN, a part number and NSN that disagree, a 1-character typo, a description-only line, and no match.
+- Tests cover every row of the confidence table, including a shared NSN, a part number and NSN that disagree, an NSN that matches while the part number is not in inventory, a `LINE_NOT_GROUNDED` line, a contradicting description, a 1-character typo, a description-only line, and no match.
+- A test shows that a line without an NSN never matches a part whose NSN is NULL.
 - Tests cover the default supplier rule: one offer can fill the request, several can, none can, and ties.
 - `matchLines` for 30 lines runs in under 500 ms against the full inventory once T1 has loaded it.
 - `GET /api/parts?q=` returns candidates for a part number, an NSN, and a description.
@@ -122,12 +123,14 @@ Use a small fixture inventory inserted in tests, so this task does not depend on
 
 **Build:** the paste page (EXT-1, EXT-3) and the review screen (technical design section 8, REV-1 to REV-6).
 Use fixtures from `src/lib/contracts/fixtures.ts` until T2 and T3 land.
-Save calls `POST /api/quotes` with a `quoteId` generated when the page opens.
+Save calls `POST /api/quotes` with the extraction ID, and handles `ALREADY_SAVED` by linking to the existing draft.
 
 **Done when:**
 
 - Each fixture renders correctly, and the mixed fixture shows every state: high, low, none, short stock, unit warning, and a notice.
-- Component tests cover the save gate, editing quantity, picking a candidate and a supplier, removing and adding lines, and `edited` tracking.
+- Component tests cover the save gate (including quantity warnings that must be confirmed), editing quantity, picking a candidate and a supplier, removing and adding lines, and `edited` tracking.
+- Routine cases (not in inventory, short stock, 0 on hand) use neutral styling, not error styling.
+- No review state is kept in localStorage or anything else shared between tabs.
 - The paste page shows elapsed seconds and Cancel, and handles each error code with Retry and Continue manually.
 - The layout is checked visually at 1280px and 1024px, with no overflow, misalignment, or color-only signals.
 
@@ -139,9 +142,10 @@ Save calls `POST /api/quotes` with a `quoteId` generated when the page opens.
 
 **Done when:**
 
-- Integration tests show that saving the same `quoteId` twice creates one quote.
+- Integration tests show that saving the same extraction twice creates one quote, and the second save returns `ALREADY_SAVED`.
 - Tests show that client-sent prices cannot exist in the request and the total comes from inventory.
 - Tests show that unmatched lines are saved unpriced, that a missing offer returns 409 with line positions, and that stock is unchanged after saving.
+- A test shows that two drafts from different extractions can each quote the full on-hand quantity of the same offer.
 - The list and detail pages render from seeded data.
 
 ### T6. Deploy (needs the user for Railway and Cloudflare access)
@@ -162,8 +166,8 @@ Walk the user through any step that needs their accounts.
 
 1. Replace any remaining stubs and fixtures with the real modules.
 2. Playwright E2E with `FakeLlmClient`: the happy path from paste to read-only view, and each failure scenario in PRD section 6.
-3. `pnpm eval:emails`: run all 12 sample emails through the real model and print a summary per email.
-4. Walk through PRD section 11 by hand in the browser, tune matching thresholds, and fix anything that looks off.
+3. `pnpm eval:emails`: run each of the 12 sample emails 3 times through the real model and print a summary per email, including whether the runs agreed.
+4. Walk through PRD section 11 by hand in the browser, tune matching thresholds (tighten the High gate if any High line has the wrong part), and fix anything that looks off.
 
 **Done when:** PRD sections 6 and 11 pass locally and on the deployed URL.
 
@@ -177,4 +181,5 @@ Walk the user through any step that needs their accounts.
 | Keyboard flow | REV-7 | |
 | Highlight source text | REV-8 | |
 | Customer and RFQ reference | EXT-10 | Needs a contract change to `LlmExtraction` |
-| Superseded-chain notice polish | EXT-9 | |
+| Superseded-chain notice polish | EXT-9 | The probe showed `superseded_note` stays null without a clearer prompt rule |
+| Self-consistency check | FAIL-2 | P2. Run twice and flag lines where the runs disagree. See D-014. |

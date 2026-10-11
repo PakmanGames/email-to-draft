@@ -82,11 +82,11 @@ Status values: **Accepted**, **Proposed** (waiting on an open question in the PR
 
 **Status:** Accepted
 
-**Context:** "A confidence the rep can understand" that "drives the screen".
+**Context:** "A confidence the rep can understand" that "drives the screen". A raw score like 0.73 means nothing to a rep. The brief adds that a wrong High costs more than a Low on a line that was already right, because the rep skims High lines.
 
-**Decision:** High, Low, or None, never a raw score. High only comes from a single unambiguous exact match. Every level carries a one-sentence reason.
+**Decision:** High, Low, or None, never a raw score, each with a one-sentence reason. High is a gate: exactly one part from an exact rule, every identifier on the line agreeing, the line confirmed against its own email text, and no contradicting description. Anything else is Low.
 
-**Trade-off:** It hides nuance (a 95% fuzzy match is still Low), but it is honest and maps directly onto what the rep has to do.
+**Trade-off:** More correct lines land in Low and cost the rep a click to confirm, which is the cheaper mistake. A 95% fuzzy match is still Low. We track how often reps change a High suggestion (PRD metric G4) to check that the gate is tight enough.
 
 ### D-008. Server re-prices on save and snapshots the result
 
@@ -100,7 +100,7 @@ Status values: **Accepted**, **Proposed** (waiting on an open question in the PR
 
 ### D-009. Client-generated quote ID makes saving idempotent
 
-**Status:** Accepted
+**Status:** Superseded by D-013
 
 **Context:** Double clicks and retries after network errors should not create duplicate drafts.
 
@@ -131,3 +131,39 @@ Status values: **Accepted**, **Proposed** (waiting on an open question in the PR
 **Decision:** A typed schema and migrations with drizzle-kit. The trigram queries are written as raw `sql`.
 
 **Alternatives:** Prisma (heavier, and awkward with extensions and generated columns); plain SQL files with no types.
+
+### D-013. One draft per extraction
+
+**Status:** Accepted
+
+**Context:** The brief requires that nothing breaks when the rep opens another tab. With a client-generated quote ID (D-009), the same review open in two tabs would save two drafts of one email.
+
+**Decision:** `quote.extraction_id` is NOT NULL and UNIQUE. A second save for the same extraction returns `ALREADY_SAVED` with a link to the existing draft. The client no longer generates IDs.
+
+**Alternatives:** Client-generated ID (D-009); locking a review to one tab.
+
+**Trade-off:** To quote the same email again, the rep pastes it again, which creates a new extraction. That is rare, and it keeps every draft tied to exactly one trace.
+
+### D-014. Treat the model as non-deterministic
+
+**Status:** Accepted
+
+**Context:** The same email can produce different output on different runs, and any run can be wrong.
+
+**Decision:** `temperature: 0` to reduce variation, the same deterministic checks on every run (zod, grounding, the High gate), and a separate trace per run. The eval script runs each sample email 3 times and reports whether the runs agree.
+
+**Alternatives:** Self-consistency: run every email twice and flag lines where the runs disagree.
+
+**Trade-off:** Self-consistency would catch more errors, but it doubles latency and token use, and the free plan's 8K tokens per minute would allow only about one 30-line email per minute. Deferred to P2. Two test runs on sample email 03 at `temperature: 0` gave identical output.
+
+### D-015. Requests above stock are quoted at the requested quantity
+
+**Status:** Proposed (PRD Q6)
+
+**Context:** The brief says a request above on-hand is normal and "we can still quote it for however much we have". The agreed scope says requested and on-hand are "never capped or split".
+
+**Decision:** Quote the requested quantity. Show on hand, the shortfall, and lead time side by side, and let the rep lower the quantity by hand.
+
+**Alternatives:** Cap the quantity at what is on hand.
+
+**Trade-off:** Capping would silently change what the customer asked for, which conflicts with the agreed scope.

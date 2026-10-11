@@ -22,15 +22,25 @@ The rep's job: "When an RFQ email arrives, turn it into a correctly priced draft
 The rep knows parts, part numbers, and NSNs well.
 The rep does not want to learn how the matching works, but needs to know at a glance which lines are safe and which need attention.
 
-## 3. Goals and success metrics
+## 3. Goals, principles, and success metrics
 
-These map directly to "What we'll look at" in the README.
+### Principles
+
+1. **A wrong High is worse than a correct Low.** The rep skims High lines, so a High label has to be right. When any signal is ambiguous, the line is Low. We accept more Low lines to keep High trustworthy.
+2. **The model is untrusted and non-deterministic.** The same email can produce different output on different runs, and any run can be wrong. Every model output passes deterministic checks before the rep sees it, and every run is traced.
+3. **Normal business is not an error.** A part we don't carry, a request larger than stock, zero on hand, and a part with no NSN are all routine. The screen shows them plainly, without error styling, and never blocks on them.
+4. **The rep has the last word.** Nothing becomes a draft until the rep saves it, and every line can be changed before saving.
+
+### Metrics
+
+These map directly to "What we'll look at" in the README, plus G4 from the brief.
 
 | Goal | Metric | How we measure it | MVP target |
 | --- | --- | --- | --- |
 | G1. The draft is usually right without edits | Share of saved lines with `edited = false` and share of drafts with zero edits | Recorded on save (see SAVE-4) | Measured and reported, no fixed target yet |
 | G2. Fixing a wrong draft is fast | Time from paste to saved draft, and clicks per fix | Manual timing on the 12 sample emails | Clean 4-line email saved in under 60 seconds |
 | G3. Failures never hurt the rep | Crashes, unreviewed saves, or dead ends | Fault-injection suite plus the 12 sample emails | Zero of each |
+| G4. High means correct | Share of High lines where the rep changed the suggested part | Recorded on save (SAVE-4), and checked by hand on the 12 sample emails | Zero |
 
 ## 4. User flow
 
@@ -64,7 +74,7 @@ Priority: **P0** is required for the MVP, **P1** is the next iteration, **P2** i
 | EXT-1 | P0 | A paste page with a single text box (max 20,000 characters, with a counter) and an Extract button. Empty or oversized input is rejected before calling the model. |
 | EXT-2 | P0 | An LLM extracts line items as JSON using structured output in a schema we define. The server validates the output with zod before anything else touches it. |
 | EXT-3 | P0 | The wait is visible: a spinner, elapsed seconds, and a Cancel button. It has a hard 30-second limit, after which the rep sees a timeout message with Retry and Continue manually. |
-| EXT-4 | P0 | Each extraction is its own request with its own ID, and the review URL is keyed by that ID. A second browser tab cannot see or change another tab's extraction. |
+| EXT-4 | P0 | Each extraction is its own request with its own ID, and the review URL is keyed by that ID. The rep reviews one email at a time, and there is no multi-email view. Opening the app in another tab, during a wait or a review, never affects the first tab: no in-progress state is shared between tabs, and the same review open in two tabs can only produce one draft (SAVE-1). |
 | EXT-5 | P0 | Emails are untrusted. The prompt treats the email as data, the model has no tools, the output schema has no price, status, or approval fields, and every extracted identifier must appear in the email text. Email text is always rendered as escaped plain text. |
 | EXT-6 | P0 | Quantity and unit are reported by the model as written. Code converts known units (each, dozen, hundred, and pack sizes stated in the email) to each. Anything else is flagged for the rep to confirm. The rep always sees the original wording next to the converted quantity. |
 | EXT-7 | P0 | NSNs are recognized with or without dashes and with or without an "NSN" prefix, and normalized to `####-##-###-####`. |
@@ -78,21 +88,23 @@ Priority: **P0** is required for the MVP, **P1** is the next iteration, **P2** i
 | --- | --- | --- |
 | MAT-1 | P0 | Exact matching runs first: NSN exact match, then part number exact match ignoring case, spaces, and dashes. |
 | MAT-2 | P0 | Fuzzy matching runs only when exact matching finds nothing: similar part numbers first, then description. |
-| MAT-3 | P0 | Every line gets one confidence level that belongs to the match: **High** (safe to skim), **Low** (the rep must choose), or **None** (not in inventory). Each comes with a one-sentence reason a rep understands, such as "Exact NSN match" or "No exact match. Closest part number differs by 1 character." |
+| MAT-3 | P0 | Every line gets one confidence level that belongs to the match: **High** (safe to skim), **Low** (the rep must choose), or **None** (not in inventory). Each comes with a one-sentence reason a rep understands, such as "Exact NSN match" or "No exact match. Closest part number differs by 1 character." The rep never sees a raw score like 0.73. |
+| MAT-3a | P0 | **High** is given only when every identifier on the line (part number, NSN) points to the same single part through an exact rule, those identifiers appear in that line's own text in the email, and the line's description (if any) does not contradict the part. Anything less is **Low** (principle 1). |
 | MAT-4 | P0 | Low-confidence lines show up to 5 candidate parts, best first, each with its own reason. |
 | MAT-5 | P0 | Each candidate part lists all supplier offers with on-hand quantity, unit price, and lead time. A documented default supplier is preselected (see technical design). |
 | MAT-6 | P0 | A line with no match is kept, says "Not in inventory", and stays unpriced unless the rep picks a part. |
+| MAT-7 | P0 | Routine inventory facts are shown as facts, not errors: an offer with 0 on hand is listed as "0 on hand", and a part with no NSN (stored as NULL) can never be matched by NSN. |
 
 ### 5.4 Review (REV)
 
 | ID | Pri | Requirement |
 | --- | --- | --- |
 | REV-1 | P0 | Lines appear in email order, next to the original email text. |
-| REV-2 | P0 | A summary bar shows line counts by confidence (for example "30 lines: 24 ready, 4 need a choice, 2 not in inventory"). High lines are compact and skimmable. Low lines are expanded with their candidates. Confidence is shown with text and an icon, not color alone. |
+| REV-2 | P0 | A summary bar shows line counts by confidence (for example "30 lines: 24 ready, 4 need a choice, 2 not in inventory"). A line is "ready" when it is High and has no quantity warning. Ready lines are compact and skimmable. Low lines are expanded with their candidates. Confidence is shown with text and an icon, not color alone. |
 | REV-3 | P0 | The rep can edit quantity, pick a candidate part, pick a supplier, remove a line, and add a line by searching inventory or as free text (unmatched). |
-| REV-4 | P0 | Requested quantity and on-hand quantity are shown side by side. Short stock gets a visible badge ("short by 150"). The requested quantity is never capped or split across suppliers. |
+| REV-4 | P0 | Requested quantity, on-hand quantity, and lead time are shown side by side. Asking for more than we have is normal: the line is quoted at the requested quantity with a neutral "short by 150" note, never capped or split across suppliers (see Q6). The rep can lower the quantity by hand. |
 | REV-5 | P0 | Unit and extended prices come from inventory only. The total covers priced lines, and unpriced lines are labeled as excluded from it. |
-| REV-6 | P0 | Save is enabled only when every Low line has an explicit decision (a part was picked, or the rep chose to keep it unmatched) and every line has a quantity greater than 0. When disabled, the button says what is left to do and links to the first such line. |
+| REV-6 | P0 | Save is enabled only when every Low line has an explicit decision (a part was picked, or the rep chose to keep it unmatched), every line has a quantity greater than 0, and every quantity warning (missing, unit not understood, not found in the email, or line not confirmed against the email) has been confirmed or edited. When disabled, the button says what is left to do and links to the first such line. |
 | REV-7 | P1 | Keyboard flow: move between lines, pick candidates by number, and save without the mouse. |
 | REV-8 | P1 | Hovering or focusing a line highlights the text it came from in the original email. |
 
@@ -100,10 +112,10 @@ Priority: **P0** is required for the MVP, **P1** is the next iteration, **P2** i
 
 | ID | Pri | Requirement |
 | --- | --- | --- |
-| SAVE-1 | P0 | Saving re-prices every line from inventory on the server, ignores any price sent by the client, snapshots the offer details onto the line, and writes the whole draft in one transaction. Saving twice (double click, retry after a network error) creates one draft, not two. |
-| SAVE-2 | P0 | Drafts may contain unmatched lines. Saving does not reserve or decrement stock. |
+| SAVE-1 | P0 | Saving re-prices every line from inventory on the server, accepts no price from the client, snapshots the offer details onto the line, and writes the whole draft in one transaction. Each extraction produces at most one draft: saving again (double click, retry, or the same review open in a second tab) creates nothing new and links to the existing draft. |
+| SAVE-2 | P0 | Drafts may contain unmatched lines. Saving does not reserve or decrement stock. On-hand quantities are current inventory, not reduced by other drafts, so two drafts can both quote the same 5 units. |
 | SAVE-3 | P0 | A drafts list (newest first) shows date, line count, unmatched count, and total. Each draft opens read-only. |
-| SAVE-4 | P1 | Each saved line records whether it came from extraction or was added by hand, and whether the rep edited it. This feeds metric G1. |
+| SAVE-4 | P1 | Each saved line records whether it came from extraction or was added by hand, whether the rep edited it, and which part was suggested. This feeds metrics G1 and G4. |
 
 ### 5.6 Failure handling (FAIL)
 
@@ -132,6 +144,8 @@ This is the one firm requirement: the model will sometimes return garbage, and t
 | Provider rate limit (HTTP 429) | "Rate limited, try again in N seconds" with Continue manually | Attempt with error code `RATE_LIMITED` |
 | Part not in inventory | Line kept with "Not in inventory", unpriced | Line match result |
 | Database unavailable on save | "Couldn't save, your edits are still here" with Retry | Nothing, since the save is one transaction |
+| The model gives different output for the same email on another run | Every run goes through the same checks, and anything ambiguous becomes Low | Each run is its own extraction with its own trace |
+| The same review is open in two tabs | The first Save creates the draft. The second shows "Already saved" with a link to it. | One draft |
 
 ## 7. Non-functional requirements
 
@@ -149,6 +163,8 @@ This is the one firm requirement: the model will sometimes return garbage, and t
 - Reserving stock, sending quotes to customers, or converting quotes to orders.
 - Markup, discounts, or pricing rules beyond inventory prices.
 - Editing a draft after it is saved.
+- Reviewing several emails at the same time. One email at a time is enough, but extra tabs must not break anything.
+- Reserving stock, or netting on-hand quantities across drafts.
 - Units of measure in inventory (everything in inventory is assumed to be "each").
 - Several emails in one batch.
 
@@ -157,9 +173,11 @@ This is the one firm requirement: the model will sometimes return garbage, and t
 1. The LLM provider is **GroqCloud** (free plan) using `openai/gpt-oss-120b` with strict JSON-schema output. Confirmed on 2026-10-11 (Q1).
 2. The quoted unit price equals the inventory `unit_cost` column as-is, with no markup. See Q2.
 3. Every inventory quantity and price is per each.
-4. Inventory is clean, per the agreed scope. If it is not, the load fails loudly instead of silently fixing data.
-5. Default supplier rule: the cheapest supplier that can fill the full requested quantity. If none can, the one with the most on hand. Ties go to the shorter lead time. The rep can always override.
-6. The 12 sample emails in `mock_data/mock_b/rfq_emails/` are representative of real traffic. The answer keys stay closed until after the presentation.
+4. Inventory is clean, with no messy or invalid rows (confirmed by the brief). The loader still validates and the constraints still state the assumptions, but the loader never cleans or repairs data.
+5. Two inventory values look like missing data but are real: a quantity of 0 means the supplier has none on hand right now, and a blank NSN means the part has no NSN. A blank NSN is stored as NULL, not an empty string, so it can never match anything.
+6. Quoting more than is on hand is allowed. Drafts don't reserve stock, so two drafts quoting the same units is a valid outcome.
+7. Default supplier rule: the cheapest supplier that can fill the full requested quantity. If none can, the one with the most on hand. Ties go to the shorter lead time. The rep can always override.
+8. The 12 sample emails in `mock_data/mock_b/rfq_emails/` are representative of real traffic. The answer keys stay closed until after the presentation.
 
 ## 10. Open questions
 
@@ -168,13 +186,15 @@ This is the one firm requirement: the model will sometimes return garbage, and t
 | Q1 | Is the API key for GroqCloud (groq.com) or xAI Grok (x.ai)? | **Answered: GroqCloud.** A key was created and the model was tested on 2026-10-11. |
 | Q2 | Should quotes apply a markup over `unit_cost`? | No markup. Price equals `unit_cost`. |
 | Q3 | Which subdomain should the app live on? | `quotes.<your-domain>` |
-| Q4 | Should the default supplier favor price or lead time? Email 10 (AOG) suggests lead time sometimes matters more. | Price first, as in assumption 5. The rep overrides. |
+| Q4 | Should the default supplier favor price or lead time? Email 10 (AOG) suggests lead time sometimes matters more. | Price first, as in assumption 7. The rep overrides. |
 | Q5 | Should a low-confidence line be allowed in a saved draft without an explicit decision? | No. Save requires a decision on every Low line (REV-6). |
+| Q6 | The brief says that when a request exceeds stock "we can still quote it for however much we have". Does that mean quote the requested quantity and show the shortfall, or lower the quantity to what is on hand? | Quote the requested quantity, never capped (agreed scope). The rep can lower it by hand. |
 
 ## 11. Acceptance test set
 
 Each sample email exercises a specific behavior.
 The MVP is done when every row behaves as described, without opening the answer keys.
+Across all 12 emails, no line may be High with the wrong part (G4), and running each email 3 times must give the same lines, or the differences must be caught by the checks in section 6.
 
 | Email | Behavior under test |
 | --- | --- |
