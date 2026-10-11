@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { SaveQuoteConflict, SaveQuoteResponse } from "@/lib/contracts";
+import { MAX_LINE_QUANTITY, SaveQuoteConflict, SaveQuoteResponse } from "@/lib/contracts";
 import { quote, quoteLine } from "@/lib/db/schema";
 import { insertExtraction, insertInventory, matchedLine, unmatchedLine } from "@/lib/quotes/test-fixtures";
 import { setupTestDb } from "@/test/db";
@@ -90,6 +90,22 @@ describe("POST /api/quotes", () => {
     expect(response.status).toBe(400);
     expect((await response.json()).error).toContain("partNumber and supplier must both be set or both be null");
     expect(await db.$count(quoteLine)).toBe(0);
+  });
+
+  it("rejects a quantity larger than a quote line can store, naming the line", async () => {
+    const body = await validBody();
+    const response = await post({ ...body, lines: [body.lines[0], { ...body.lines[1], quantity: MAX_LINE_QUANTITY + 1 }] });
+
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toContain("lines[1].quantity");
+    expect(await db.$count(quote)).toBe(0);
+  });
+
+  it("saves a quantity at the limit", async () => {
+    const body = await validBody();
+    const response = await post({ ...body, lines: [{ ...body.lines[0], quantity: MAX_LINE_QUANTITY }] });
+
+    expect(response.status).toBe(201);
   });
 
   it("rejects a body that isn't JSON", async () => {

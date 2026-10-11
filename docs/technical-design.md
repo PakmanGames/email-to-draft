@@ -304,6 +304,8 @@ export const ExtractionAttempt = z.strictObject({
 Every draft therefore has an extraction, and that extraction is the draft's trace.
 
 ```ts
+export const MAX_LINE_QUANTITY = 2_147_483_647; // quote_line.quantity is a Postgres integer
+
 export const SaveQuoteRequest = z.strictObject({
   extractionId: z.uuid(),                  // one draft per extraction
   markupBps: z.number().int().min(0).max(100000), // 2500 = 25%
@@ -311,7 +313,7 @@ export const SaveQuoteRequest = z.strictObject({
     origin: z.enum(["extracted", "manual"]),
     edited: z.boolean(),
     requestedText: z.string().min(1).max(2000),
-    quantity: z.number().int().positive(),
+    quantity: z.number().int().positive().max(MAX_LINE_QUANTITY), // larger fails the save with a 400, not a 500
     matchConfidence: Confidence.nullable(),
     matchReason: z.string().nullable(),
     suggestedPartNumber: z.string().nullable(), // what matching preselected, for metric G4
