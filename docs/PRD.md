@@ -5,7 +5,7 @@
 | Status | Draft v0.1 |
 | Last updated | 2026-10-11 |
 | Owner | Andy |
-| Source | [README.md](../README.md) (problem statement and agreed scope) |
+| Source | [brief.md](brief.md) (problem statement and agreed scope) |
 | Companion docs | [Technical design](technical-design.md), [Task plan](tasks.md), [Decision log](decisions.md) |
 
 ## 1. Problem
@@ -33,7 +33,7 @@ The rep does not want to learn how the matching works, but needs to know at a gl
 
 ### Metrics
 
-These map directly to "What we'll look at" in the README, plus G4 from the brief.
+These map directly to "What we'll look at" in the [brief](brief.md), plus G4 from the briefing.
 
 | Goal | Metric | How we measure it | MVP target |
 | --- | --- | --- | --- |
