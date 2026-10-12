@@ -2,6 +2,7 @@
 
 import { LoaderCircle, Search } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Button } from "@/components/ui/button";
 import { SearchPartsResponse, type Candidate } from "@/lib/contracts";
 import { CandidateSummary } from "./candidate-summary";
 
@@ -68,7 +69,7 @@ export function PartSearch({ label, placeholder, markupBps, onPick, actions, inp
         }}
       >
         <div className="relative min-w-48 flex-1">
-          <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-neutral-400" />
+          <Search aria-hidden className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <input
             id={inputId}
             type="search"
@@ -77,42 +78,33 @@ export function PartSearch({ label, placeholder, markupBps, onPick, actions, inp
             maxLength={2000}
             placeholder={placeholder}
             onChange={(event) => setQuery(event.target.value)}
-            className="h-7 w-full rounded-md border border-neutral-200 bg-white pr-2 pl-7 text-[13px] text-neutral-900 shadow-xs outline-none placeholder:text-neutral-400 focus-visible:border-neutral-400 focus-visible:ring-2 focus-visible:ring-neutral-400/30"
+            className="h-7 w-full rounded-md border border-input bg-background pr-2 pl-7 text-body shadow-xs outline-none placeholder:text-faint-foreground focus-visible:ring-3 focus-visible:ring-ring/45"
           />
         </div>
-        <button
-          type="submit"
-          disabled={!query.trim() || state.status === "searching"}
-          className="inline-flex h-7 items-center gap-1 rounded-md border border-neutral-200 bg-white px-2.5 text-xs font-medium text-neutral-800 shadow-xs hover:bg-neutral-50 focus-visible:ring-2 focus-visible:ring-neutral-400/60 focus-visible:outline-none disabled:opacity-50"
-        >
-          {state.status === "searching" && <LoaderCircle aria-hidden className="size-3.5 animate-spin" />}
+        <Button type="submit" variant="outline" disabled={!query.trim() || state.status === "searching"}>
+          {state.status === "searching" && <LoaderCircle aria-hidden className="animate-spin" />}
           Search
-        </button>
+        </Button>
         {actions?.(query.trim())}
       </form>
 
       <div aria-live="polite">
         {state.status === "unavailable" && (
-          <p className="text-xs text-neutral-500">Inventory search isn&apos;t available right now.</p>
+          <p className="text-footnote text-muted-foreground">Inventory search isn&apos;t available right now.</p>
         )}
         {state.status === "done" && state.candidates.length === 0 && (
-          <p className="text-xs text-neutral-500">No parts found for &ldquo;{state.query}&rdquo;.</p>
+          <p className="text-footnote text-muted-foreground">No parts found for &ldquo;{state.query}&rdquo;.</p>
         )}
         {state.status === "done" && state.candidates.length > 0 && (
-          <ul aria-label={`Inventory results for ${state.query}`} className="divide-y divide-neutral-100 rounded-md border border-neutral-200 bg-white">
+          <ul aria-label={`Inventory results for ${state.query}`} className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
             {state.candidates.map((candidate) => (
-              <li key={candidate.partNumber} className="flex items-start gap-3 px-2 py-1.5">
+              <li key={candidate.partNumber} className="flex items-center gap-3 px-2.5 py-1.5">
                 <div className="min-w-0 flex-1">
                   <CandidateSummary candidate={candidate} markupBps={markupBps} />
                 </div>
-                <button
-                  type="button"
-                  onClick={() => pick(candidate)}
-                  aria-label={`Use ${candidate.partNumber}`}
-                  className="h-6 shrink-0 rounded-md border border-neutral-200 bg-white px-2 text-xs font-medium text-neutral-800 shadow-xs hover:bg-neutral-50 focus-visible:ring-2 focus-visible:ring-neutral-400/60 focus-visible:outline-none"
-                >
+                <Button variant="outline" size="sm" onClick={() => pick(candidate)} aria-label={`Use ${candidate.partNumber}`}>
                   Use
-                </button>
+                </Button>
               </li>
             ))}
           </ul>

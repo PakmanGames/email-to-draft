@@ -37,10 +37,20 @@ export type SaveQuoteRequest = z.infer<typeof SaveQuoteRequest>;
 // Read side of a saved draft (technical design 5.7 and 9). Values are the snapshots in
 // `quote_line`, never live inventory.
 
+/**
+ * Display labels read from the draft's email by `summarizeEmail` (src/lib/email-summary.ts),
+ * so a rep recognizes a draft. Untrusted plain text: always rendered as text, never as HTML.
+ */
+const EmailLabels = {
+  customer: z.string().nullable(), // the sender's name from the email's From line
+  subject: z.string().nullable(), // its Subject line, or its first non-empty line
+};
+
 /** One row of the drafts list, newest first. */
 export const QuoteSummary = z.strictObject({
   id: z.uuid(),
   createdAt: z.date(),
+  ...EmailLabels,
   lineCount: z.number().int().nonnegative(),
   unmatchedCount: z.number().int().nonnegative(),
   shortStockCount: z.number().int().nonnegative(), // lines where quantity > qtyOnHand
@@ -73,6 +83,7 @@ export type QuoteLine = z.infer<typeof QuoteLine>;
 export const QuoteDetail = z.strictObject({
   id: z.uuid(),
   createdAt: z.date(),
+  ...EmailLabels,
   extractionId: z.uuid(),
   markupBps: z.number().int().min(0).max(100000),
   totalCents: z.number().int().nonnegative(),

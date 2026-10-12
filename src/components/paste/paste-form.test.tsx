@@ -48,7 +48,7 @@ function failure(code: ExtractionErrorCode, retryAfterSeconds: number | null = n
 async function pasteAndExtract(text = "Please quote 10 x MS9556-82") {
   const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
   render(<PasteForm />);
-  await user.click(screen.getByRole("textbox", { name: "RFQ email" }));
+  await user.click(screen.getByRole("textbox", { name: "Customer email" }));
   await user.paste(text);
   await user.click(screen.getByRole("button", { name: "Extract" }));
   return user;
@@ -61,7 +61,7 @@ describe("input checks before calling the model", () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<PasteForm />);
     expect(screen.getByRole("button", { name: "Extract" })).toHaveProperty("disabled", true);
-    await user.click(screen.getByRole("textbox", { name: "RFQ email" }));
+    await user.click(screen.getByRole("textbox", { name: "Customer email" }));
     await user.paste("   \n  ");
     expect(screen.getByRole("button", { name: "Extract" })).toHaveProperty("disabled", true);
     expect(fetchMock).not.toHaveBeenCalled();
@@ -70,7 +70,7 @@ describe("input checks before calling the model", () => {
   it("counts characters and rejects an oversized email", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<PasteForm />);
-    await user.click(screen.getByRole("textbox", { name: "RFQ email" }));
+    await user.click(screen.getByRole("textbox", { name: "Customer email" }));
     await user.paste("x".repeat(MAX_EMAIL_CHARS + 5));
 
     expect(screen.getByText("20,005 / 20,000 characters")).toBeTruthy();
@@ -79,19 +79,46 @@ describe("input checks before calling the model", () => {
   });
 });
 
+describe("extracting", () => {
+  it("explains what happens next beside the Extract button", () => {
+    render(<PasteForm />);
+    const header = screen.getByRole("button", { name: "Extract" }).parentElement!;
+    expect(header.textContent).toContain("You review it before saving.");
+  });
+
+  it("extracts with ⌘↩ or Ctrl+↩ from the text box", async () => {
+    fetchMock.mockResolvedValue(json(200, { ok: true, extractionId, status: "succeeded" }));
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<PasteForm />);
+    await user.click(screen.getByRole("textbox", { name: "Customer email" }));
+    await user.paste("Please quote 10 x MS9556-82");
+    await user.keyboard("{Meta>}{Enter}{/Meta}");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(push).toHaveBeenCalledWith(`/review/${extractionId}`);
+  });
+
+  it("does nothing on ⌘↩ while the text box is empty", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    render(<PasteForm />);
+    await user.click(screen.getByRole("textbox", { name: "Customer email" }));
+    await user.keyboard("{Control>}{Enter}{/Control}");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
 describe("waiting", () => {
   it("shows elapsed seconds and Cancel, and Cancel keeps the email", async () => {
     fetchMock.mockImplementation(hangingFetch());
     const user = await pasteAndExtract();
 
-    expect(screen.getByText("Extracting line items")).toBeTruthy();
+    expect(screen.getByText("Extracting")).toBeTruthy();
     expect(screen.getByText("0 s")).toBeTruthy();
     await advance(3_100);
     expect(screen.getByText("3 s")).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.getByText("Extraction cancelled. Your email is still here.")).toBeTruthy();
-    expect(screen.getByRole("textbox", { name: "RFQ email" })).toHaveProperty("value", "Please quote 10 x MS9556-82");
+    expect(screen.getByRole("textbox", { name: "Customer email" })).toHaveProperty("value", "Please quote 10 x MS9556-82");
     expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(true);
   });
 
@@ -102,7 +129,7 @@ describe("waiting", () => {
 
     expect(screen.getByRole("alert").textContent).toContain("This is taking too long.");
     expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
-    expect(screen.queryByRole("link", { name: /Continue manually/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Continue Manually/ })).toBeNull();
   });
 });
 
@@ -133,7 +160,7 @@ describe("results", () => {
     const user = await pasteAndExtract();
 
     expect(screen.getByRole("alert").textContent).toContain(title);
-    expect(screen.getByRole("link", { name: /Continue manually/ }).getAttribute("href")).toBe(`/review/${extractionId}`);
+    expect(screen.getByRole("link", { name: /Continue Manually/ }).getAttribute("href")).toBe(`/review/${extractionId}`);
 
     fetchMock.mockResolvedValueOnce(json(200, { ok: true, extractionId, status: "no_items" }));
     await user.click(screen.getByRole("button", { name: "Retry" }));
@@ -147,7 +174,7 @@ describe("results", () => {
 
     expect(screen.getByRole("alert").textContent).toContain("Rate limited, try again in 12 seconds.");
     expect(screen.getByRole("button", { name: "Retry in 12 s" })).toHaveProperty("disabled", true);
-    expect(screen.getByRole("link", { name: /Continue manually/ })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Continue Manually/ })).toBeTruthy();
     await advance(5_000);
     expect(screen.getByRole("alert").textContent).toContain("Rate limited, try again in 7 seconds.");
     await advance(7_000);
@@ -165,7 +192,7 @@ describe("results", () => {
 
     expect(screen.getByRole("alert").textContent).toContain(text);
     expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
-    expect(screen.queryByRole("link", { name: /Continue manually/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Continue Manually/ })).toBeNull();
     expect(push).not.toHaveBeenCalled();
   });
 
@@ -180,7 +207,7 @@ describe("results", () => {
     await pasteAndExtract();
     expect(screen.getByRole("alert").textContent).toContain("Something went wrong on the server.");
     expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
-    expect(screen.queryByRole("link", { name: /Continue manually/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Continue Manually/ })).toBeNull();
   });
 
   it("does not offer Retry when the server says retrying won't help", async () => {

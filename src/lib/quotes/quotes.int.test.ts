@@ -1,6 +1,6 @@
 import { asc, eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
-import { offer, part, quote, quoteLine } from "@/lib/db/schema";
+import { extraction, offer, part, quote, quoteLine } from "@/lib/db/schema";
 import { setupTestDb } from "@/test/db";
 import { ExtractionNotFoundError, getQuote, listQuotes, OfferMissingError, saveQuote } from ".";
 import { insertExtraction, insertInventory, matchedLine, unmatchedLine } from "./test-fixtures";
@@ -290,6 +290,22 @@ describe("listQuotes", () => {
     expect(summaries[2].createdAt).toBeInstanceOf(Date);
   });
 
+  it("labels each draft with its email's customer and subject", async () => {
+    const [{ id: extractionId }] = await db
+      .insert(extraction)
+      .values({
+        emailText: "From: Sam Okafor <sam@okafor.example>\nSubject: RFQ for fittings\n\nPlease quote.",
+        status: "succeeded",
+        model: "test",
+        promptVersion: "test",
+      })
+      .returning({ id: extraction.id });
+    const { quoteId } = await saveQuote({ extractionId, markupBps: 2500, lines: [] });
+
+    expect(await listQuotes()).toMatchObject([{ customer: "Sam Okafor", subject: "RFQ for fittings" }]);
+    expect(await getQuote(quoteId)).toMatchObject({ customer: "Sam Okafor", subject: "RFQ for fittings" });
+  });
+
   it("returns an empty list when nothing is saved", async () => {
     expect(await listQuotes()).toEqual([]);
   });
@@ -312,6 +328,8 @@ describe("getQuote", () => {
     expect(detail).toEqual({
       id: quoteId,
       createdAt: expect.any(Date),
+      customer: null,
+      subject: "Please quote the attached.", // no headers, so the first line
       extractionId,
       markupBps: 2500,
       totalCents: 2291 * 4,

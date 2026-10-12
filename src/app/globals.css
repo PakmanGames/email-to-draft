@@ -2,14 +2,15 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@custom-variant dark (&:is(.dark *));
+/* Dark mode follows the system setting, like a native Mac app. */
+@custom-variant dark (@media (prefers-color-scheme: dark));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-sans: var(--font-system);
+  --font-mono: var(--font-system-mono);
+  --font-heading: var(--font-system);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -39,92 +40,178 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+
+  /* App tokens beyond shadcn's set. */
+  --color-faint-foreground: var(--faint-foreground);
+  --color-toolbar: var(--toolbar);
+  --color-hover: var(--hover);
+  --color-selection: var(--selection);
+  --color-mark: var(--mark);
+  --color-success: var(--success);
+  --color-success-surface: var(--success-surface);
+  --color-attention: var(--attention);
+  --color-attention-surface: var(--attention-surface);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-surface: var(--warning-surface);
+  --color-warning-border: var(--warning-border);
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-xl: calc(var(--radius) * 1.2);
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /*
+   * Type scale modeled on macOS text styles. Hierarchy comes from size and weight, so
+   * colors stay for meaning (accent, warnings, confidence).
+   */
+  --text-caption: 0.6875rem; /* 11px */
+  --text-caption--line-height: 0.875rem;
+  --text-footnote: 0.75rem; /* 12px */
+  --text-footnote--line-height: 1rem;
+  --text-body: 0.8125rem; /* 13px, the macOS body size */
+  --text-body--line-height: 1.125rem;
+  --text-headline: 0.9375rem; /* 15px */
+  --text-headline--line-height: 1.25rem;
+  --text-title: 1.375rem; /* 22px */
+  --text-title--line-height: 1.75rem;
+
+  --shadow-float: 0 0 0 0.5px var(--border), 0 8px 24px -6px rgb(0 0 0 / 0.18), 0 2px 6px -2px rgb(0 0 0 / 0.1);
+  --shadow-card: 0 0 0 0.5px var(--border), 0 1px 2px rgb(0 0 0 / 0.05), 0 6px 16px -8px rgb(0 0 0 / 0.12);
 }
 
+/*
+ * Light appearance. Values follow the macOS system palette (systemBlue, label colors,
+ * separators), so the app reads as native without bundling Apple's fonts or symbols.
+ */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  /* The system font renders SF Pro on a Mac. Apple's license doesn't allow self-hosting it. */
+  --font-system: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-system-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  --background: #ffffff;
+  --foreground: #1d1d1f;
+  --card: #ffffff;
+  --card-foreground: #1d1d1f;
+  --popover: #ffffff;
+  --popover-foreground: #1d1d1f;
+  --primary: #007aff; /* systemBlue: primary actions, selection, focus */
+  --primary-foreground: #ffffff;
+  --secondary: #e9e9ed;
+  --secondary-foreground: #1d1d1f;
+  --muted: #f5f5f7;
+  --muted-foreground: #6e6e73; /* secondaryLabel, readable at 12px on white */
+  --faint-foreground: #a1a1a6; /* tertiaryLabel: placeholders, dashes */
+  --accent: #f0f0f3; /* hover fill for buttons and menu items */
+  --accent-foreground: #1d1d1f;
+  --destructive: #d70015;
+  --border: rgb(0 0 0 / 0.1); /* hairline separator */
+  --input: rgb(0 0 0 / 0.16);
+  --ring: #007aff;
+  --radius: 0.625rem;
+
+  --toolbar: rgb(255 255 255 / 0.85);
+  --hover: rgb(0 0 0 / 0.035);
+  --selection: rgb(0 122 255 / 0.09);
+  --mark: rgb(0 122 255 / 0.16);
+
+  /* Confidence. High is green, Low is indigo, None stays neutral (PRD principle 3). */
+  --success: #1f8a3b;
+  --success-surface: rgb(52 199 89 / 0.13);
+  --attention: #4f4bd1;
+  --attention-surface: rgb(88 86 214 / 0.11);
+  /* Amber is kept for short stock and quantity warnings. */
+  --warning: #e08600;
+  --warning-foreground: #8a4b00;
+  --warning-surface: rgb(255 159 10 / 0.13);
+  --warning-border: rgb(255 159 10 / 0.42);
+
+  --sidebar: #f2f2f4;
+  --sidebar-foreground: #1d1d1f;
+  --sidebar-primary: #007aff;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgb(0 0 0 / 0.07); /* selected source-list row */
+  --sidebar-accent-foreground: #1d1d1f;
+  --sidebar-border: rgb(0 0 0 / 0.1);
+  --sidebar-ring: #007aff;
+
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1e1e1e;
+    --foreground: #f5f5f7;
+    --card: #262628;
+    --card-foreground: #f5f5f7;
+    --popover: #2c2c2e;
+    --popover-foreground: #f5f5f7;
+    --primary: #0a84ff;
+    --primary-foreground: #ffffff;
+    --secondary: rgb(255 255 255 / 0.1);
+    --secondary-foreground: #f5f5f7;
+    --muted: #2a2a2c;
+    --muted-foreground: #a1a1a6;
+    --faint-foreground: #6e6e73;
+    --accent: rgb(255 255 255 / 0.08);
+    --accent-foreground: #f5f5f7;
+    --destructive: #ff6961;
+    --border: rgb(255 255 255 / 0.1);
+    --input: rgb(255 255 255 / 0.16);
+    --ring: #0a84ff;
+
+    --toolbar: rgb(30 30 30 / 0.85);
+    --hover: rgb(255 255 255 / 0.04);
+    --selection: rgb(10 132 255 / 0.18);
+    --mark: rgb(10 132 255 / 0.32);
+
+    --success: #30d158;
+    --success-surface: rgb(48 209 88 / 0.16);
+    --attention: #8e8bff;
+    --attention-surface: rgb(94 92 230 / 0.24);
+    --warning: #ff9f0a;
+    --warning-foreground: #ffc56b;
+    --warning-surface: rgb(255 159 10 / 0.15);
+    --warning-border: rgb(255 159 10 / 0.38);
+
+    --sidebar: #28282a;
+    --sidebar-foreground: #f5f5f7;
+    --sidebar-primary: #0a84ff;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: rgb(255 255 255 / 0.1);
+    --sidebar-accent-foreground: #f5f5f7;
+    --sidebar-border: rgb(0 0 0 / 0.5);
+    --sidebar-ring: #0a84ff;
+  }
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
+    @apply border-border;
   }
   html {
     @apply font-sans;
+    color-scheme: light dark;
+  }
+  body {
+    @apply bg-background text-body text-foreground;
+  }
+  /*
+   * A visible focus ring on everything the keyboard can reach. Components that draw their
+   * own ring (shadcn's ring utilities) turn the outline off themselves.
+   */
+  :focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--ring) 75%, transparent);
+    outline-offset: 1px;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--primary) 28%, transparent);
   }
 }

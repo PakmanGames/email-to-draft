@@ -115,7 +115,7 @@ The environment is validated at startup, so a missing or malformed variable stop
 ```
 src/
   app/                  pages and route handlers (/, /review, /quotes, /api/*)
-  components/           paste, review, and quote UI
+  components/           app shell (sidebar, toolbar), paste, review, and quote UI
   lib/
     contracts/          zod schemas shared by the server and the UI
     extraction/         LLM client, prompt, validation, grounding, unit conversion

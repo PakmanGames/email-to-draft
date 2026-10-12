@@ -1,31 +1,30 @@
-import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { BackToDrafts } from "@/components/quotes/back-to-drafts";
+import { draftTitle } from "@/components/quotes/format";
+import { LocalDateTime } from "@/components/quotes/local-date-time";
 import { QuoteDetailSkeleton, QuoteDetailView } from "@/components/quotes/quote-detail";
+import { Toolbar } from "@/components/shell/toolbar";
 import { getQuote } from "@/lib/quotes";
 
-export const metadata: Metadata = { title: "Draft quote" };
+export const metadata: Metadata = { title: "Draft" };
 
-export default function QuotePage({ params }: PageProps<"/quotes/[quoteId]">) {
+export default function DraftPage({ params }: PageProps<"/quotes/[quoteId]">) {
   return (
-    <main className="mx-auto w-full max-w-6xl space-y-6 p-8">
-      <header className="space-y-2">
-        <Link
-          href="/quotes"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft aria-hidden className="size-4" />
-          Draft quotes
-        </Link>
-        <h1 className="text-2xl font-semibold">Draft quote</h1>
-      </header>
-      <Suspense fallback={<QuoteDetailSkeleton />}>
-        <Draft params={params} />
-      </Suspense>
-    </main>
+    <Suspense
+      fallback={
+        <>
+          <Toolbar title="Draft" leading={<BackToDrafts />} />
+          <main className="min-h-0 flex-1 overflow-y-auto">
+            <QuoteDetailSkeleton />
+          </main>
+        </>
+      }
+    >
+      <Draft params={params} />
+    </Suspense>
   );
 }
 
@@ -35,5 +34,21 @@ async function Draft({ params }: Pick<PageProps<"/quotes/[quoteId]">, "params">)
   await connection();
   const quote = await getQuote(quoteId);
   if (!quote) notFound();
-  return <QuoteDetailView quote={quote} />;
+  return (
+    <>
+      <Toolbar
+        leading={<BackToDrafts />}
+        title={draftTitle(quote)}
+        subtitle={
+          <>
+            {quote.customer && quote.subject && `${quote.subject} · `}Saved{" "}
+            <LocalDateTime iso={quote.createdAt.toISOString()} />
+          </>
+        }
+      />
+      <main className="min-h-0 flex-1 overflow-y-auto">
+        <QuoteDetailView quote={quote} />
+      </main>
+    </>
+  );
 }

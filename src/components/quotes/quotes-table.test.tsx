@@ -6,6 +6,8 @@ import { QuotesTable } from "./quotes-table";
 const shortDraft: QuoteSummary = {
   id: "0b6f3c2e-5f8a-4d1b-9c3e-7a2d4e6f8a10",
   createdAt: new Date("2026-10-11T22:49:00Z"),
+  customer: "Sam Okafor",
+  subject: "RFQ for fittings",
   lineCount: 3,
   unmatchedCount: 1,
   shortStockCount: 2,
@@ -15,6 +17,8 @@ const shortDraft: QuoteSummary = {
 const cleanDraft: QuoteSummary = {
   id: "1c7a4d3f-6a9b-4e2c-8d4f-8b3e5f7a9b21",
   createdAt: new Date("2026-10-10T15:05:00Z"),
+  customer: null,
+  subject: "Hi team,",
   lineCount: 4,
   unmatchedCount: 0,
   shortStockCount: 0,
@@ -34,8 +38,17 @@ describe("QuotesTable", () => {
     const cells = within(rowFor(cleanDraft.id))
       .getAllByRole("cell")
       .map((cell) => cell.textContent);
-    expect(cells.slice(1)).toEqual(["4", "0", "0", "12.5%", "$95.94"]);
+    expect(cells.slice(2, 7)).toEqual(["4", "0", "0", "12.5%", "$95.94"]);
     expect(within(rowFor(shortDraft.id)).getByText("$12,345.67")).toBeDefined();
+  });
+
+  it("names each draft by its customer and subject, or its subject alone", () => {
+    render(<QuotesTable quotes={[shortDraft, cleanDraft, { ...cleanDraft, id: "2d8b5e4a-7b0c-4f3d-9e5a-9c4f6a8b0c32", subject: null }]} />);
+
+    expect(within(rowFor(shortDraft.id)).getByRole("link").textContent).toBe("Sam Okafor");
+    expect(within(rowFor(shortDraft.id)).getByText("RFQ for fittings")).toBeDefined();
+    expect(within(rowFor(cleanDraft.id)).getByRole("link").textContent).toBe("Hi team,");
+    expect(screen.getByRole("link", { name: "Untitled draft" })).toBeDefined();
   });
 
   it("lists drafts in the order given, which is newest first", () => {
@@ -62,11 +75,11 @@ describe("QuotesTable", () => {
     );
   });
 
-  it("explains the empty list and links to the paste page", () => {
+  it("explains the empty list and offers a new quote", () => {
     render(<QuotesTable quotes={[]} />);
 
-    expect(screen.getByText("No drafts yet")).toBeDefined();
-    expect(screen.getByRole("link", { name: "Paste an email" }).getAttribute("href")).toBe("/");
+    expect(screen.getByText("No Drafts")).toBeDefined();
+    expect(screen.getByRole("link", { name: "New Quote" }).getAttribute("href")).toBe("/");
     expect(screen.queryByRole("table")).toBeNull();
   });
 });

@@ -4,6 +4,7 @@ import { ArrowRight, LoaderCircle, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { hasShortcutModifier, Shortcut } from "@/components/shell/shortcut";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { MAX_EMAIL_CHARS } from "@/lib/contracts";
 import { cn } from "@/lib/utils";
@@ -44,6 +45,15 @@ export function PasteForm() {
       setState({ status: "idle", cancelled: false });
     };
   }, []);
+
+  // The text box grows with the email (the page scrolls), instead of a fixed tall box.
+  const textarea = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const element = textarea.current;
+    if (!element) return;
+    element.style.height = "auto";
+    element.style.height = `${element.scrollHeight}px`;
+  }, [text]);
 
   const length = text.trim().length;
   const tooLong = length > MAX_EMAIL_CHARS;
@@ -91,57 +101,83 @@ export function PasteForm() {
 
   return (
     <form
-      className="space-y-3"
+      aria-label="New quote"
+      className="rounded-xl bg-card shadow-card"
       onSubmit={(event) => {
         event.preventDefault();
         void extract();
       }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" && hasShortcutModifier(event)) {
+          event.preventDefault();
+          void extract();
+        }
+      }}
     >
-      <div className="rounded-lg border border-neutral-200 bg-white shadow-xs focus-within:border-neutral-400 focus-within:ring-2 focus-within:ring-neutral-400/20">
-        <textarea
-          aria-label="RFQ email"
-          aria-describedby="email-length"
-          value={text}
-          readOnly={busy}
-          spellCheck={false}
-          placeholder="Paste the customer's email here, including any tables and forwarded messages."
-          onChange={(event) => {
-            setText(event.target.value);
-            if (state.status !== "extracting") setState({ status: "idle", cancelled: false });
-          }}
-          className="block h-[50vh] min-h-64 w-full resize-y rounded-t-lg bg-transparent px-4 py-3 font-mono text-[13px] leading-5 text-neutral-900 outline-none placeholder:font-sans placeholder:text-neutral-400 read-only:text-neutral-500"
-        />
-        <div className="flex min-h-12 items-center gap-3 border-t border-neutral-100 px-3 py-2">
-          <p id="email-length" className={cn("text-xs tabular-nums", tooLong ? "text-red-700" : "text-neutral-500")}>
-            {count.format(length)} / {count.format(MAX_EMAIL_CHARS)} characters
+      {/* Stays in view while a long email scrolls, so Extract is always where the eye is. */}
+      <div className="sticky top-0 z-10 flex min-h-16 items-center gap-4 rounded-t-xl border-b border-border bg-card/95 px-5 py-3 backdrop-blur">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-body font-semibold">Customer Email</h2>
+          <p className="truncate text-footnote text-muted-foreground">
+            Each line is matched to inventory and priced. You review it before saving.
           </p>
-          <div className="ml-auto flex items-center gap-3">
-            {busy && <Waiting opening={state.status === "opening"} />}
-            {state.status === "extracting" ? (
+        </div>
+        {busy ? (
+          <div className="flex shrink-0 items-center gap-3">
+            <Waiting opening={state.status === "opening"} />
+            {state.status === "extracting" && (
               <Button type="button" variant="outline" onClick={cancel}>
                 Cancel
               </Button>
-            ) : (
-              <Button type="submit" disabled={busy || length === 0 || tooLong}>
-                Extract
-              </Button>
             )}
           </div>
-        </div>
+        ) : (
+          <Button
+            type="submit"
+            disabled={length === 0 || tooLong}
+            aria-keyshortcuts="Meta+Enter Control+Enter"
+            className="shrink-0 gap-2 px-3"
+          >
+            Extract
+            <Shortcut keys="↩" />
+          </Button>
+        )}
       </div>
 
-      {tooLong && (
-        <p role="alert" className="text-[13px] text-red-700">
-          This email is {count.format(length - MAX_EMAIL_CHARS)} characters over the limit. Remove older messages
-          or signatures to fit it in.
-        </p>
-      )}
       {state.status === "idle" && state.cancelled && (
-        <p role="status" className="text-[13px] text-neutral-600">
+        <p role="status" className="border-b border-border bg-muted px-5 py-2.5 text-footnote text-muted-foreground">
           Extraction cancelled. Your email is still here.
         </p>
       )}
       {state.status === "failed" && <FailurePanel failure={state.failure} onRetry={() => void extract()} />}
+
+      <textarea
+        ref={textarea}
+        aria-label="Customer email"
+        aria-describedby="email-length"
+        autoFocus
+        value={text}
+        readOnly={busy}
+        spellCheck={false}
+        rows={1}
+        placeholder="Paste the email here, including any tables and forwarded messages."
+        onChange={(event) => {
+          setText(event.target.value);
+          if (state.status !== "extracting") setState({ status: "idle", cancelled: false });
+        }}
+        className="block min-h-64 w-full resize-none bg-transparent px-5 py-4 font-mono text-body text-foreground outline-none placeholder:font-sans placeholder:text-faint-foreground read-only:text-muted-foreground"
+      />
+
+      <div className="flex min-h-10 items-center gap-3 rounded-b-xl border-t border-border px-5 py-2 text-footnote">
+        <p id="email-length" className={cn("tabular-nums", tooLong ? "text-destructive" : "text-muted-foreground")}>
+          {count.format(length)} / {count.format(MAX_EMAIL_CHARS)} characters
+        </p>
+        {tooLong && (
+          <p role="alert" className="text-destructive">
+            {count.format(length - MAX_EMAIL_CHARS)} characters over the limit. Remove older messages or signatures.
+          </p>
+        )}
+      </div>
     </form>
   );
 }
@@ -155,10 +191,10 @@ function Waiting({ opening }: { opening: boolean }) {
     return () => clearInterval(id);
   }, []);
   return (
-    <p className="flex items-center gap-2 text-[13px] text-neutral-600">
-      <LoaderCircle aria-hidden className="size-4 animate-spin text-neutral-400" />
-      <span role="status">{opening ? "Opening review" : "Extracting line items"}</span>
-      <span className="w-8 text-neutral-500 tabular-nums">{seconds} s</span>
+    <p className="flex items-center gap-2 text-body text-muted-foreground">
+      <LoaderCircle aria-hidden className="size-4 animate-spin text-faint-foreground" />
+      <span role="status">{opening ? "Opening review" : "Extracting"}</span>
+      <span className="w-8 tabular-nums">{seconds} s</span>
     </p>
   );
 }
@@ -166,17 +202,17 @@ function Waiting({ opening }: { opening: boolean }) {
 function FailurePanel({ failure, onRetry }: { failure: Failure; onRetry: () => void }) {
   const wait = useCountdown(failure.retryAfterSeconds);
   return (
-    <div role="alert" className="flex items-start gap-3 rounded-lg bg-white px-4 py-3 ring-1 ring-neutral-200 ring-inset">
-      <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-red-600" />
+    <div role="alert" className="flex items-start gap-3 border-b border-border bg-muted px-5 py-3">
+      <TriangleAlert aria-hidden className="mt-px size-4 shrink-0 text-destructive" />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-neutral-900">
+        <p className="text-body font-semibold">
           {failure.retryAfterSeconds === null
             ? failure.title
             : wait > 0
               ? `Rate limited, try again in ${wait} seconds.`
               : "Rate limited. You can retry now."}
         </p>
-        {failure.detail && <p className="text-[13px] text-neutral-600">{failure.detail}</p>}
+        {failure.detail && <p className="text-footnote text-muted-foreground">{failure.detail}</p>}
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
           {failure.retryable && (
             <Button type="button" variant="outline" disabled={wait > 0} onClick={onRetry}>
@@ -185,7 +221,7 @@ function FailurePanel({ failure, onRetry }: { failure: Failure; onRetry: () => v
           )}
           {failure.extractionId && (
             <Link href={`/review/${failure.extractionId}`} className={cn(buttonVariants({ variant: "outline" }))}>
-              Continue manually
+              Continue Manually
               <ArrowRight aria-hidden />
             </Link>
           )}

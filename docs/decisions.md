@@ -203,3 +203,25 @@ Status values: **Accepted**, **Proposed** (waiting on an open question in the PR
 **Alternatives:** A temporary public TCP proxy; committing the CSV and loading it during deploy.
 
 **Trade-off:** Loading needs an SSH key registered with Railway, which is a one-time step. The database is never on the public internet, and a leaked database password is useless outside Railway.
+
+### D-020. A Mac-style app shell with a sidebar on every page
+
+**Status:** Accepted
+
+**Context:** The live site had no consistent navigation.
+The paste page had a small "Drafts" link, the review screen only "← New email", and the drafts list no header at all.
+Drafts showed only a timestamp, and pages used different names for the same things ("New quote", "New email", "Review quote", "Draft quotes").
+A rep works in this app all day, so they need to see where they are and reach anything in one click.
+
+**Decision:** Every page shares one app shell modeled on Mac apps like Mail and Notes.
+A sidebar (source list) holds New Quote, Drafts with a count, and the most recent drafts named by customer or subject, with date and total.
+Above each page's content, a toolbar shows where you are on the leading edge and that page's actions on the trailing edge.
+One vocabulary everywhere: New Quote, Drafts, Draft, Save Draft.
+The look comes from theme tokens in `globals.css` (system font, macOS system colors, hairline separators), and dark mode follows the system setting.
+Drafts are labeled from their extraction's email (From and Subject lines, else the first line), derived on the server with no schema change.
+
+**Alternatives:** A top navigation bar (the web convention, but it competes with the toolbar for the row that holds Save Draft, and it has no room for recent drafts); per-page headers with more links (each page reinvents navigation); an inspector pane for Low lines on the review screen instead of inline candidates.
+
+**Trade-off:** The sidebar takes 208px, so below 1280px the original email starts hidden and opens over the lines rather than beside them.
+Low lines expand their candidates inline, not in an inspector: the choice stays next to the line's quantity and prices, and the email pane stays visible, at the cost of taller rows for lines that need a decision.
+The sidebar's drafts are read on each page load and refreshed after a save, so a draft saved in another tab shows up after the next reload.

@@ -1,30 +1,29 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Suspense } from "react";
+import { AppSidebarView } from "@/components/shell/app-sidebar";
+import { SidebarWithDrafts } from "@/components/shell/sidebar-with-drafts";
 import "./globals.css";
 
-// shadcn's globals.css reads the sans font from `--font-sans`.
-const geistSans = Geist({
-  variable: "--font-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "RFQ to Draft Quote",
+  title: { template: "%s · Email to Draft", default: "Email to Draft" },
   description: "Turn a pasted RFQ email into a draft quote priced from inventory.",
 };
 
+/**
+ * The app shell (D-020): the sidebar on every page, and each page's own toolbar and
+ * content beside it. The window never scrolls as a whole; each page scrolls its content.
+ */
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en" className="h-full antialiased">
+      <body className="h-full overflow-hidden">
+        <div className="flex h-dvh">
+          <Suspense fallback={<AppSidebarView recent={null} draftCount={null} pathname={null} />}>
+            <SidebarWithDrafts />
+          </Suspense>
+          <div className="flex min-w-0 flex-1 flex-col">{children}</div>
+        </div>
+      </body>
     </html>
   );
 }

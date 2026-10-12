@@ -326,6 +326,13 @@ export const SaveQuoteRequest = z.strictObject({
 });
 ```
 
+The read side of a saved draft (`QuoteSummary` for the drafts list and sidebar, `QuoteDetail` for the read-only page) also carries two display labels from the draft's email, both nullable plain text (section 9, step 6):
+
+```ts
+customer: z.string().nullable(), // the sender's name from the email's From line
+subject: z.string().nullable(),  // its Subject line, or its first non-empty line
+```
+
 ### 5.7 Module signatures
 
 ```ts
@@ -433,17 +440,40 @@ The reason string says which rule picked it.
 
 ## 8. Review screen (T4)
 
-- **Layout.** Original email on the left (escaped `pre-wrap`, collapsible). Lines table on the right. Summary bar, markup input (default 25%), and Save button in a sticky header.
-- **Line row.** Requested text (with converted quantity), match (part number, description, confidence badge with icon and text, reason), supplier selector (supplier, on hand, unit price, lead time), editable quantity, on hand, unit price with cost beneath it, extended price, and a remove button.
-- **Low rows.** Expanded with a radio list of candidates, a "Keep unmatched" option, and a search box backed by `GET /api/parts`.
+- **App shell (D-020).** Every page sits beside a sidebar (source list): New Quote, Drafts with a count, and the eight most recent drafts by customer or subject, with date and total.
+  Exactly one row is selected: New Quote on the paste and review pages, Drafts on the list, and the open draft on its page.
+  Each page has a toolbar: where you are on the leading edge, that page's actions on the trailing edge.
+  The sidebar's drafts are read per request and refreshed after a save, and a failed read leaves navigation working.
+- **Look.** Theme tokens in `src/app/globals.css`: the system font stack (SF Pro on a Mac, never self-hosted), macOS system colors with one accent (systemBlue) for primary actions, selection, and focus, hairline separators, and soft shadows only on what floats.
+  Dark mode follows `prefers-color-scheme`.
+  Components use tokens, never one-off colors, and `cn` in `src/lib/utils.ts` knows the app's type scale so merged classes keep their size.
+- **Paste page.** A compose card: a header with a one-line explanation and Extract (⌘↩), a text box that grows with the email, and a character counter.
+  The header stays in view while a long email scrolls.
+  The wait (spinner, elapsed seconds, Cancel) and every failure (with Retry and Continue Manually) appear right under it.
+- **Review layout.** The toolbar shows the customer or subject as the title and the draft's status as the subtitle (not saved, line count, and the REV-10 short-stock warning).
+  Its actions are the email toggle, markup (default 25%), total, and Save Draft (⌘S).
+  Under it, a filter bar holds a segmented control (All, Needs Attention, Ready, Unmatched, each with a count) and what is left before Save, with a Next button.
+  The original email is a pane on the right (escaped `pre-wrap`): beside the lines from 1280px, toggled from the toolbar, floating over the lines on narrower windows, and open at any width when there are no lines.
+- **Line row.** Two rows to scan.
+  The first has the confidence badge (icon and text), part number, and description, then quantity, the supplier pop-up (each offer with on hand, unit price, and lead time), unit price, extended price, and an actions menu (change part, remove line).
+  The second has the requested text and the reason in quiet secondary text, on hand and lead time under the supplier, and cost under the unit price.
+  The line number lives in the row's accessible name, not a column, because the email's own numbering is often in the requested text.
+- **Low rows.** Expanded inline with a radio list of candidates, a "Keep unmatched" option, and a search box backed by `GET /api/parts`.
+  Inline rather than in an inspector, so the choice sits next to the line's numbers and the email pane stays visible.
 - **None rows.** "Not in inventory" with the same search box, and unpriced until a part is picked.
-- **Warnings.** Shown inline under the line, in amber, with the warning message.
-- **Notices.** Banner at the top for `NO_ITEMS`, `LINES_DISCARDED`, `SUPERSEDED`, and `EXTRACTION_FAILED`.
+- **Warnings.** Compact pills under the line, with their action inline.
+  Amber is for short stock and quantity warnings; a converted unit and an answered flag are neutral notes.
+- **Notices.** Banner at the top of the lines for `NO_ITEMS`, `LINES_DISCARDED`, `SUPERSEDED`, and `EXTRACTION_FAILED`.
 - **Routine cases.** "Not in inventory" and "0 on hand" use neutral styling, not error colors (PRD principle 3).
-- **Short stock.** A line whose quantity exceeds the selected supplier's on hand shows an amber "short by N" warning and a "Quote N on hand" button that sets the quantity to on hand. The button is hidden when on hand is 0, and using it counts as an edit. The summary bar adds "N lines quote more than on hand". None of this blocks Save.
+- **Short stock.** A line whose quantity exceeds the selected supplier's on hand shows an amber "Short by N" pill with a "Quote N on Hand" action that sets the quantity to on hand. The action is hidden when on hand is 0, and using it counts as an edit. The toolbar subtitle adds "N lines quote more than on hand". None of this blocks Save.
 - **Markup.** Changing the markup re-prices every line and the total at once with `unitPriceCents`. It is sent as `markupBps` on save.
+- **Original email (REV-8).** The source text of the line the rep is on, or hovering, is highlighted in the email pane, which scrolls to follow the active line.
+- **Keyboard.** j and k (or the arrow keys) move between lines, except inside a quantity box or a pop-up.
+  ⌘S saves when Save is allowed, and otherwise goes to what is left.
+  Focus rings are always visible.
 - **State.** Client-side reducer held in memory and keyed by the extraction ID. Nothing goes in localStorage or other cross-tab storage, so a second tab never affects the first. `edited` is computed per line by comparing with the seed.
-- **Save gate.** REV-6. Lines with `QTY_MISSING`, `UNIT_UNKNOWN`, `QTY_NOT_IN_TEXT`, or `LINE_NOT_GROUNDED` need the rep to confirm or edit the quantity. The button label states what is left ("2 lines need a choice, 1 quantity to confirm"). If the save returns `ALREADY_SAVED`, show a link to the existing draft.
+  A filter keeps showing a line the rep just resolved until the filter is picked again, so rows never vanish under the cursor.
+- **Save gate.** REV-6. Lines with `QTY_MISSING`, `UNIT_UNKNOWN`, `QTY_NOT_IN_TEXT`, or `LINE_NOT_GROUNDED` need the rep to confirm or edit the quantity. The filter bar states what is left ("2 lines need a choice, 1 quantity to confirm"), and Next and ⌘S go to the next such line. If the save returns `ALREADY_SAVED`, show a link to the existing draft.
 
 Develop against fixtures in `src/lib/contracts/fixtures.ts` (T0 provides a few `ReviewSeed` examples) until T2 and T3 land.
 
@@ -451,9 +481,12 @@ Develop against fixtures in `src/lib/contracts/fixtures.ts` (T0 provides a few `
 
 1. Validate `SaveQuoteRequest`.
 2. In one transaction: look up each matched line's offer by `(part_number, supplier)` and return `OFFER_MISSING` with positions if any are missing. Price each line with `unitPriceCents(offer cost, markupBps)` and compute `total_cents` from those prices. Insert the quote with `ON CONFLICT (extraction_id) DO NOTHING`; if nothing was inserted, return `ALREADY_SAVED` with the existing draft's ID. Otherwise insert the lines with snapshotted cost, price, and offer fields.
-3. Drafts list: `created_at`, line count, unmatched count, short-stock count (lines where `quantity > qty_on_hand`), markup, and total, newest first.
-4. Read-only detail: snapshot values only, a warning banner when any line quotes more than on hand, and a link to the extraction trace.
+3. Drafts list: customer and subject (see below), `created_at`, line count, unmatched count, short-stock count (lines where `quantity > qty_on_hand`), markup, and total, newest first.
+4. Read-only detail: snapshot values only, titled by customer or subject, a warning banner when any line quotes more than on hand, and a link to the extraction trace.
 5. Saving never writes to `offer`. On-hand quantities are not netted across drafts, so two drafts can quote the same stock.
+6. Customer and subject are display labels read from the first 4,000 characters of the extraction's `email_text` by `summarizeEmail` (`src/lib/email-summary.ts`): the sender's name from the first `From:` line, the first `Subject:` line, or the first non-empty line when there are neither.
+   They are untrusted plain text, with control characters removed, and are always rendered as text.
+   No column stores them, so the schema is unchanged.
 
 ## 10. Configuration
 

@@ -57,6 +57,8 @@ function draft(lines: QuoteLine[]): QuoteDetail {
   return {
     id: "0b6f3c2e-5f8a-4d1b-9c3e-7a2d4e6f8a10",
     createdAt: new Date("2026-10-11T22:49:00Z"),
+    customer: "Sam Okafor",
+    subject: "RFQ for fittings",
     extractionId: "7d1e5a6c-3a51-4b8e-9a43-2f0f5b6c1d20",
     markupBps: 2500,
     totalCents: lines.reduce((sum, line) => sum + (line.unitPriceCents ?? 0) * line.quantity, 0),
@@ -91,18 +93,15 @@ describe("QuoteDetailView", () => {
     expect(screen.queryByText(/Short by/)).toBeNull();
   });
 
-  it("shows each priced line's unit price with its cost, and the extended price", () => {
+  it("shows each priced line's part, request, supplier with stock and lead time, prices", () => {
     render(<QuoteDetailView quote={draft([covered])} />);
 
     const cells = within(row(0)).getAllByRole("cell");
     expect(cells.map((cell) => cell.textContent)).toEqual([
       "1",
-      "96F62405-7 qty 4",
-      "96F62405-7UNION,TUBE TITANIUM",
-      "Bay Aero Components",
+      "96F62405-7 UNION,TUBE TITANIUMRequested: 96F62405-7 qty 4",
       "4",
-      "59",
-      "35 days",
+      "Bay Aero Components59 on hand · 35 days lead",
       "$22.91Cost $18.33",
       "$91.64",
     ]);
@@ -112,8 +111,8 @@ describe("QuoteDetailView", () => {
     render(<QuoteDetailView quote={draft([covered, unmatched])} />);
 
     const cells = within(row(2)).getAllByRole("cell");
-    expect(cells[2].textContent).toBe("Unmatched");
-    expect(cells.slice(5).map((cell) => cell.textContent)).toEqual(["—", "—", "—", "—"]);
+    expect(cells[1].textContent).toBe("UnmatchedRequested: ZX-4471-B hydraulic coupler, qty 2");
+    expect(cells.slice(3).map((cell) => cell.textContent)).toEqual(["—", "—", "—"]);
     expect(screen.getByText("1 unpriced line is not included in the total.")).toBeDefined();
   });
 

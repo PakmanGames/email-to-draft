@@ -10,6 +10,7 @@ import { z } from "zod";
 import { SaveQuoteRequest, type QuoteDetail, type QuoteSummary } from "@/lib/contracts";
 import { db } from "@/lib/db/client";
 import { extraction, offer, part, quote, quoteLine } from "@/lib/db/schema";
+import { summarizeEmail } from "@/lib/email-summary";
 import { unitPriceCents } from "@/lib/pricing";
 
 /**
@@ -150,13 +151,21 @@ function offerKey(partNumber: string, supplier: string): string {
   return JSON.stringify([partNumber, supplier]);
 }
 
-/** Saved drafts, newest first. */
+/**
+ * How much of an email `summarizeEmail` reads. From and Subject lines sit near the top, even
+ * in a forwarded chain, and the drafts list shouldn't carry every email in full.
+ */
+const EMAIL_HEAD_CHARS = 4000;
+const emailHead = sql<string>`left(${extraction.emailText}, ${EMAIL_HEAD_CHARS})`;
+
+/** Saved drafts, newest first, each labeled with its email's customer and subject. */
 export async function listQuotes(): Promise<QuoteSummary[]> {
   // count(position) skips the all-NULL row LEFT JOIN produces for a draft with no lines.
-  return db
+  const rows = await db
     .select({
       id: quote.id,
       createdAt: quote.createdAt,
+      emailHead,
       lineCount: sql<number>`count(${quoteLine.position})::integer`,
       unmatchedCount: sql<number>`(count(${quoteLine.position}) FILTER (WHERE ${quoteLine.partNumber} IS NULL))::integer`,
       // Same rule as isShortStock() in ./short-stock.ts.
@@ -165,9 +174,11 @@ export async function listQuotes(): Promise<QuoteSummary[]> {
       totalCents: quote.totalCents,
     })
     .from(quote)
+    .innerJoin(extraction, eq(extraction.id, quote.extractionId))
     .leftJoin(quoteLine, eq(quoteLine.quoteId, quote.id))
-    .groupBy(quote.id)
+    .groupBy(quote.id, extraction.id)
     .orderBy(desc(quote.createdAt), desc(quote.id));
+  return rows.map(({ emailHead, ...row }) => ({ ...row, ...summarizeEmail(emailHead) }));
 }
 
 /** A saved draft and its lines in position order, or null when there is no such draft. */
@@ -175,17 +186,20 @@ export async function getQuote(id: string): Promise<QuoteDetail | null> {
   // The ID comes from the URL. Postgres rejects a malformed uuid, so treat it as not found.
   if (!z.uuid().safeParse(id).success) return null;
 
-  const [row] = await db
+  const [found] = await db
     .select({
       id: quote.id,
       createdAt: quote.createdAt,
+      emailHead,
       extractionId: quote.extractionId,
       markupBps: quote.markupBps,
       totalCents: quote.totalCents,
     })
     .from(quote)
+    .innerJoin(extraction, eq(extraction.id, quote.extractionId))
     .where(eq(quote.id, id));
-  if (!row) return null;
+  if (!found) return null;
+  const { emailHead: head, ...row } = found;
 
   const lines = await db
     .select({
@@ -209,5 +223,5 @@ export async function getQuote(id: string): Promise<QuoteDetail | null> {
     .where(eq(quoteLine.quoteId, id))
     .orderBy(quoteLine.position);
 
-  return { ...row, lines };
+  return { ...row, ...summarizeEmail(head), lines };
 }

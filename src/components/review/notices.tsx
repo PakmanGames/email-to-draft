@@ -26,19 +26,21 @@ export function Notices({ notices, onAddLine }: { notices: Notice[]; onAddLine: 
             key={`${notice.code}-${i}`}
             role="status"
             className={cn(
-              "flex items-start gap-2.5 rounded-lg px-3 py-2.5 text-[13px] ring-1 ring-inset",
-              warning ? "bg-amber-50 text-amber-950 ring-amber-600/20" : "bg-white text-neutral-800 ring-neutral-200",
+              "flex items-center gap-3 rounded-lg border px-3.5 py-2.5",
+              warning ? "border-warning-border bg-warning-surface" : "border-border bg-muted",
             )}
           >
-            <Icon aria-hidden className={cn("mt-0.5 size-4 shrink-0", warning ? "text-amber-600" : "text-neutral-500")} />
+            <Icon aria-hidden className={cn("size-4 shrink-0", warning ? "text-warning" : "text-muted-foreground")} />
             <div className="min-w-0 flex-1">
-              <p className="font-medium">{title}</p>
-              <p className={warning ? "text-amber-900" : "text-neutral-600"}>{notice.message}</p>
+              <p className={cn("font-semibold", warning && "text-warning-foreground")}>{title}</p>
+              <p className={cn("text-footnote", warning ? "text-warning-foreground" : "text-muted-foreground")}>
+                {notice.message}
+              </p>
             </div>
             {offerAdd && onAddLine && (
               <Button variant="outline" size="sm" onClick={onAddLine}>
                 <Plus aria-hidden />
-                Add line
+                Add Line
               </Button>
             )}
           </div>
