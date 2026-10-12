@@ -22,6 +22,7 @@ Severity is about the rep's experience: **High** blocks a task or shows a wrong 
 | [KI-012](#ki-012-a-failure-after-the-model-answers-is-a-500-with-no-extraction-id) | A failure after the model answers is a 500 with no extraction ID | Contracts, T2, T4 | Medium | Fixed |
 | [KI-013](#ki-013-a-malformed-extraction-request-answers-empty_input) | A malformed extraction request answers `EMPTY_INPUT` | Contracts, T2 | Low | Accepted |
 | [KI-014](#ki-014-an-email-with-a-nul-character-can-never-be-extracted) | An email with a NUL character can never be extracted | T2 | Medium | Fixed |
+| [KI-015](#ki-015-a-deploy-shipped-the-previous-deploys-stylesheet) | A deploy shipped the previous deploy's stylesheet | Deploy, T4 | High | Fixed |
 
 ---
 
@@ -196,3 +197,18 @@ Nothing was recorded, so there was no Continue manually, and the rep can't see t
 Text copied from some PDFs and older systems can carry one.
 
 **Fix:** `POST /api/extractions` drops NUL characters along with the surrounding whitespace before validating, so the email is extracted normally (technical design 6, step 1).
+
+### KI-015. A deploy shipped the previous deploy's stylesheet
+
+**Status:** Fixed in the build config (Turbopack's build cache is off). **Severity:** High. **Found in:** production, after PR #11.
+
+After PR #11 deployed, production served the new pages with the old theme: a serif font, black accents, and the wrong text sizes.
+The container's `src/app/globals.css` was the new one, but its built stylesheet held the old theme compiled together with utilities that only the new components use.
+So Tailwind's loader was handed the previous deploy's `globals.css`, while its scanner read the new components from disk.
+Railway restores `.next/cache` between builds (a docs-only deploy compiled in about 1.4s, a code change in about 4s), and Next 16.3+ keeps Turbopack's build cache there.
+Clean builds of the same commit, locally and in Docker, produce the right stylesheet, and so did a warm local build, so the exact invalidation bug wasn't reproduced off Railway.
+
+**Fix:** `experimental.turbopackFileSystemCacheForBuild: false` in `next.config.ts`, so every production build compiles from source, at the cost of a few seconds per deploy.
+The font is now Inter, self-hosted through `next/font`, with the system font as the fallback.
+To check a deploy, the stylesheet linked from `/` must contain `--font-ui`.
+

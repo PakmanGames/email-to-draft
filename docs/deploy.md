@@ -24,6 +24,7 @@ Two things this pipeline depends on:
 
 - **devDependencies stay installed.** The pre-deploy step uses `drizzle-kit`, a devDependency. Railpack does not prune dev dependencies by default. Setting `RAILPACK_PRUNE_DEPS` would break migrations.
 - **The database is unreachable during the build.** Railway's private network only exists at runtime, so no page may query Postgres while it is being prerendered.
+- **Builds don't reuse Turbopack's cache.** Railway restores `.next/cache` between deploys, and a build warmed by it once shipped the previous deploy's stylesheet (KI-015). `next.config.ts` turns Turbopack's build cache off, so every build compiles from source.
 
 ## Infrastructure as code
 
