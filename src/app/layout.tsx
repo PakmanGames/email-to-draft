@@ -1,8 +1,12 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import { Suspense } from "react";
 import { AppSidebarView } from "@/components/shell/app-sidebar";
 import { SidebarWithDrafts } from "@/components/shell/sidebar-with-drafts";
 import "./globals.css";
+
+// Downloaded at build time and served from this app, so no request goes to Google at runtime.
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
 export const metadata: Metadata = {
   title: { template: "%s · Email to Draft", default: "Email to Draft" },
@@ -15,7 +19,7 @@ export const metadata: Metadata = {
  */
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang="en" className={`${inter.variable} h-full antialiased`}>
       <body className="h-full overflow-hidden">
         <div className="flex h-dvh">
           <Suspense fallback={<AppSidebarView recent={null} draftCount={null} pathname={null} />}>
