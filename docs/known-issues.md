@@ -86,6 +86,7 @@ If it ever matters, check that the draft exists in Proxy before the page renders
 
 The server doesn't know the rep's timezone, so `LocalDateTime` (`src/components/quotes/local-date-time.tsx`) renders no text on the server and fills in local time during hydration.
 On a full page load, the Saved column is briefly empty.
+The sidebar's recent drafts and the draft page's subtitle use the same component, so their times fill in the same way.
 Client-side navigations render the time straight away.
 
 **Reason for accepting:** showing server time (UTC on Railway) would be wrong for the rep, and the gap only lasts until hydration.
