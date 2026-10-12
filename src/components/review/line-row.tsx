@@ -1,7 +1,8 @@
 "use client";
 
-import { Check, ChevronDown, Info, TriangleAlert, X } from "lucide-react";
-import { useState, type Dispatch, type ReactNode } from "react";
+import { Menu } from "@base-ui/react/menu";
+import { Check, CircleX, Ellipsis, Info, TriangleAlert } from "lucide-react";
+import { useState, type Dispatch, type ReactNode, type Ref } from "react";
 import { cn } from "@/lib/utils";
 import { ConfidenceBadge } from "./confidence-badge";
 import { formatCents, formatCount } from "./format";
@@ -9,107 +10,88 @@ import { PartPicker } from "./part-picker";
 import type { LineView, ReviewAction } from "./review-model";
 import { SupplierSelect } from "./supplier-select";
 
-/** Column template shared by the header row and every line, so the columns line up. */
+/**
+ * Column template shared by the header row and every line, so the columns line up. The
+ * supplier column widens when the lines area has room (a container query on the area, since
+ * the email pane changes its width independently of the window).
+ */
 export const LINE_GRID =
-  "grid grid-cols-[1.5rem_minmax(0,1fr)_4.5rem_4.75rem_5.25rem_5.75rem_1.75rem] gap-x-3";
+  "grid grid-cols-[minmax(0,1fr)_4rem_9rem_5.25rem_5.25rem_1.5rem] gap-x-3 @4xl/lines:grid-cols-[minmax(0,1fr)_4.5rem_12rem_5.5rem_6rem_1.5rem] @4xl/lines:gap-x-4";
 
-type Props = { view: LineView; markupBps: number; dispatch: Dispatch<ReviewAction> };
+type Props = {
+  view: LineView;
+  markupBps: number;
+  dispatch: Dispatch<ReviewAction>;
+  /** The line the rep is working on: it takes Tab focus, and its source is highlighted. */
+  active: boolean;
+  /** Saving said this line's offer is gone from inventory (OFFER_MISSING). */
+  offerGone: boolean;
+  onActivate: () => void;
+  onHover: (hovering: boolean) => void;
+  rowRef: Ref<HTMLLIElement>;
+};
 
 /**
- * One requested line (technical design section 8): what the customer wrote, the match with
- * its confidence and reason, the supplier, and the numbers. High lines stay compact. Lines
- * that need a decision show the part picker, which can't be collapsed until they get one.
+ * One requested line (technical design 8). Two rows to scan: what was matched with its
+ * confidence and the numbers, then what the customer wrote and why it matched. Warnings
+ * follow as compact pills. A line that needs a decision shows its candidates inline,
+ * and can't hide them until it gets one.
  */
-export function LineRow({ view, markupBps, dispatch }: Props) {
+export function LineRow({ view, markupBps, dispatch, active, offerGone, onActivate, onHover, rowRef }: Props) {
   const { line, number, part, offer, quantityIssue, needsChoice } = view;
   const confidence = line.seed?.match.confidence ?? null;
   const [expanded, setExpanded] = useState(() => needsChoice || confidence === "none");
   const showPicker = expanded || needsChoice;
   const key = line.key;
-  const hasWarnings =
-    view.shortBy > 0 || view.quantityWarnings.length > 0 || view.otherWarnings.length > 0;
 
-  let status: ReactNode;
+  let match: ReactNode;
   if (part) {
-    status = (
+    // The part number never truncates; the description gives way first.
+    match = (
       <>
-        <span className="font-mono font-semibold text-neutral-900">{part.partNumber}</span>{" "}
-        <span className="text-neutral-600">{part.description}</span>
+        <span className="shrink-0 font-mono font-semibold">{part.partNumber}</span>
+        <span className="min-w-0 truncate text-muted-foreground" title={part.description}>
+          {part.description}
+        </span>
       </>
     );
   } else if (line.selection?.kind === "unmatched") {
-    status = (
-      <span className="text-neutral-700">
-        {confidence === "none" ? "Not in inventory" : "Unmatched"}
-        <span className="text-neutral-500"> · not priced</span>
-      </span>
-    );
+    match = <span className="text-muted-foreground">{confidence === "none" ? "Not in inventory" : "Unmatched"}</span>;
   } else {
-    status = <span className="text-neutral-700">Pick a part below</span>;
+    match = <span className="font-medium">Choose a part</span>;
   }
 
-  const hasCandidates = line.candidates.length > 0;
-  const toggleLabel = showPicker
-    ? hasCandidates ? "Hide options" : "Hide search"
-    : hasCandidates ? "Change part" : "Find a part";
-
-  // A None line's reason is "Not in inventory": the status line says so while it is unmatched,
-  // and next to a part the rep found by search it would read as a contradiction.
-  const reason = line.seed?.match.reason;
-  const showReason = Boolean(reason) && confidence !== "none";
+  // A None line's reason is "Not in inventory", which the match column already says, and
+  // next to a part found by search it would read as a contradiction.
+  const reason = confidence === "none" ? null : (line.seed?.match.reason ?? null);
+  const pills = linePills(view, dispatch, offerGone);
 
   return (
-    <li id={`line-${key}`} aria-label={`Line ${number}`} className={cn(LINE_GRID, "gap-y-2 px-3 py-2.5")}>
-      <div className="text-xs leading-7 text-neutral-400 tabular-nums">{number}</div>
-
-      <div className="min-w-0 space-y-1">
-        <p className="font-mono text-xs leading-5 break-words whitespace-pre-wrap text-neutral-500">
-          <span className="sr-only">Requested: </span>
-          {line.requestedText}
-        </p>
-
-        <div className="flex min-w-0 items-start gap-2">
+    <li
+      ref={rowRef}
+      id={`line-${key}`}
+      aria-label={`Line ${number}`}
+      tabIndex={active ? 0 : -1}
+      data-active={active || undefined}
+      onFocus={onActivate}
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
+      className={cn(
+        LINE_GRID,
+        "scroll-my-12 gap-y-2 px-5 py-2.5 outline-none hover:bg-hover focus-visible:ring-3 focus-visible:ring-ring/45 focus-visible:ring-inset data-active:bg-selection",
+      )}
+    >
+      <div className="min-w-0">
+        <p className="flex h-6 min-w-0 items-center gap-2 text-body">
           <ConfidenceBadge confidence={confidence} />
-          <p className="min-w-0 text-[13px] leading-5 break-words">{status}</p>
-        </div>
-
-        <p className="text-xs leading-5 text-neutral-500">
-          {[
-            showReason && reason,
-            view.edited && line.seed && <span className="text-neutral-400">Edited</span>,
-            !needsChoice && (
-              <button
-                type="button"
-                aria-expanded={showPicker}
-                onClick={() => setExpanded(!expanded)}
-                className="inline-flex items-center gap-0.5 rounded font-medium text-neutral-700 hover:text-neutral-950 focus-visible:ring-2 focus-visible:ring-neutral-400/60 focus-visible:outline-none"
-              >
-                {toggleLabel}
-                <ChevronDown aria-hidden className={cn("size-3.5 transition-transform", showPicker && "rotate-180")} />
-              </button>
-            ),
-          ]
-            .filter(Boolean)
-            .map((item, i) => (
-              <span key={i}>
-                {i > 0 && <span aria-hidden> · </span>}
-                {item}
-              </span>
-            ))}
+          {match}
         </p>
-
-        {part && offer && (
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            <SupplierSelect
-              offers={part.offers}
-              supplier={offer.supplier}
-              markupBps={markupBps}
-              label={`Supplier for line ${number}`}
-              onChange={(supplier) => dispatch({ type: "pickSupplier", key, supplier })}
-            />
-            {line.supplierReason && <span className="text-xs text-neutral-500">{line.supplierReason}</span>}
-          </div>
-        )}
+        <p className="truncate text-footnote text-muted-foreground" title={line.requestedText}>
+          <span className="sr-only">Requested: </span>
+          <span className="font-mono">{line.requestedText}</span>
+          {reason && <span> · {reason}</span>}
+          {view.edited && line.seed && <span className="text-faint-foreground"> · Edited</span>}
+        </p>
       </div>
 
       <div>
@@ -123,47 +105,75 @@ export function LineRow({ view, markupBps, dispatch }: Props) {
           value={line.quantityText}
           onChange={(event) => dispatch({ type: "setQuantity", key, text: event.target.value })}
           className={cn(
-            "h-7 w-full rounded-md border bg-white px-2 text-right text-[13px] text-neutral-900 tabular-nums shadow-xs outline-none placeholder:text-neutral-400 focus-visible:ring-2",
+            "h-6 w-full rounded-md border bg-background px-2 text-right text-body tabular-nums shadow-xs outline-none placeholder:text-faint-foreground focus-visible:ring-3",
             quantityIssue
-              ? "border-amber-400 bg-amber-50 focus-visible:ring-amber-400/40"
-              : "border-neutral-200 focus-visible:border-neutral-400 focus-visible:ring-neutral-400/30",
+              ? "border-warning-border bg-warning-surface focus-visible:ring-warning/40"
+              : "border-input focus-visible:ring-ring/45",
           )}
         />
       </div>
 
-      <NumberCell
-        primary={offer ? formatCount(offer.qtyOnHand) : null}
-        secondary={offer && `${offer.leadTimeDays} d lead`}
-        srLabel="on hand"
-      />
-      <NumberCell
-        primary={view.unitPriceCents !== null ? formatCents(view.unitPriceCents) : null}
-        secondary={offer && `cost ${formatCents(offer.unitCostCents)}`}
-        srLabel="unit price"
-      />
-      <NumberCell
-        primary={view.extendedCents !== null ? formatCents(view.extendedCents) : null}
-        placeholder={line.selection?.kind === "unmatched" ? "Excluded" : undefined}
-        srLabel="extended"
-        strong
-      />
-
-      <div>
-        <button
-          type="button"
-          aria-label={`Remove line ${number}`}
-          title="Remove line"
-          onClick={() => dispatch({ type: "removeLine", key })}
-          className="grid size-7 place-items-center rounded-md text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 focus-visible:ring-2 focus-visible:ring-neutral-400/60 focus-visible:outline-none"
-        >
-          <X aria-hidden className="size-4" />
-        </button>
+      <div className="min-w-0">
+        {part && offer ? (
+          <>
+            <SupplierSelect
+              offers={part.offers}
+              supplier={offer.supplier}
+              markupBps={markupBps}
+              label={`Supplier for line ${number}`}
+              onChange={(supplier) => dispatch({ type: "pickSupplier", key, supplier })}
+            />
+            <p
+              className="truncate text-footnote text-muted-foreground tabular-nums"
+              title={line.supplierReason ?? undefined}
+            >
+              {formatCount(offer.qtyOnHand)} on hand · {offer.leadTimeDays} d lead
+            </p>
+          </>
+        ) : (
+          <Dash />
+        )}
       </div>
 
-      {/* Below the line and as wide as the number columns, so candidates and warnings don't wrap. */}
-      {(hasWarnings || showPicker) && (
-        <div className="col-span-5 col-start-2 space-y-1.5">
-          <LineWarnings view={view} dispatch={dispatch} />
+      <div className="text-right tabular-nums">
+        {view.unitPriceCents !== null && offer ? (
+          <>
+            <p className="leading-6">
+              <span className="sr-only">Unit price: </span>
+              {formatCents(view.unitPriceCents)}
+            </p>
+            <p className="text-footnote whitespace-nowrap text-muted-foreground">cost {formatCents(offer.unitCostCents)}</p>
+          </>
+        ) : (
+          <Dash />
+        )}
+      </div>
+
+      <div className="text-right tabular-nums">
+        {view.extendedCents !== null ? (
+          <p className="leading-6 font-semibold">
+            <span className="sr-only">Extended: </span>
+            {formatCents(view.extendedCents)}
+          </p>
+        ) : line.selection?.kind === "unmatched" ? (
+          <p className="text-footnote leading-6 text-muted-foreground">Excluded</p>
+        ) : (
+          <Dash />
+        )}
+      </div>
+
+      <LineMenu
+        number={number}
+        partOptionsOpen={showPicker}
+        canHideOptions={!needsChoice}
+        hasCandidates={line.candidates.length > 0}
+        onToggleOptions={() => setExpanded(!showPicker)}
+        onRemove={() => dispatch({ type: "removeLine", key })}
+      />
+
+      {(pills.length > 0 || showPicker) && (
+        <div className="col-span-5 space-y-2">
+          {pills.length > 0 && <div className="flex flex-wrap gap-1.5">{pills}</div>}
           {showPicker && (
             <PartPicker
               view={view}
@@ -178,114 +188,160 @@ export function LineRow({ view, markupBps, dispatch }: Props) {
   );
 }
 
-function NumberCell({
-  primary,
-  secondary,
-  placeholder,
-  srLabel,
-  strong,
-}: {
-  primary: string | null;
-  secondary?: string | null;
-  placeholder?: string;
-  srLabel: string;
-  strong?: boolean;
-}) {
-  if (primary === null) {
-    return (
-      <p className="text-right text-xs leading-7 text-neutral-400">
-        <span className="sr-only">{srLabel}: </span>
-        {placeholder ?? "—"}
-      </p>
-    );
-  }
+function Dash() {
   return (
-    <div className="text-right tabular-nums">
-      <p className={cn("text-[13px] leading-7 text-neutral-900", strong && "font-medium")}>
-        <span className="sr-only">{srLabel}: </span>
-        {primary}
-      </p>
-      {secondary && <p className="text-xs leading-4 text-neutral-500">{secondary}</p>}
-    </div>
+    <p aria-hidden className="text-right text-body leading-6 text-faint-foreground">
+      —
+    </p>
   );
 }
 
 /**
- * Short stock and extraction warnings, in amber. A converted unit is a routine note in neutral
- * text, as is a flag the rep already answered (PRD principle 3).
+ * Short stock, extraction flags, and a gone offer, as compact pills with their action
+ * inline. Amber marks short stock and quantity warnings. A converted unit, or a flag the
+ * rep already answered, is a quiet neutral note (PRD principle 3).
  */
-function LineWarnings({ view, dispatch }: { view: LineView; dispatch: Dispatch<ReviewAction> }) {
+function linePills(view: LineView, dispatch: Dispatch<ReviewAction>, offerGone: boolean): ReactNode[] {
   const { line, offer, shortBy, quantity, quantityIssue } = view;
   const key = line.key;
-  return (
-    <>
-      {offer && shortBy > 0 && (
-        <Callout>
-          Short by {formatCount(shortBy)}: {offer.supplier} has {formatCount(offer.qtyOnHand)} on hand.
-          {offer.qtyOnHand > 0 && (
-            <CalloutButton onClick={() => dispatch({ type: "quoteOnHand", key })}>
-              Quote {formatCount(offer.qtyOnHand)} on hand
-            </CalloutButton>
+  const pills: ReactNode[] = [];
+
+  if (offerGone && offer) {
+    pills.push(
+      <Pill key="offer-gone" tone="error" icon={<CircleX />}>
+        {offer.supplier} no longer has this part. Pick another supplier or part.
+      </Pill>,
+    );
+  }
+  if (offer && shortBy > 0) {
+    pills.push(
+      <Pill key="short" tone="warning" icon={<TriangleAlert />}>
+        Short by {formatCount(shortBy)}
+        {offer.qtyOnHand > 0 && (
+          <PillAction onClick={() => dispatch({ type: "quoteOnHand", key })}>
+            Quote {formatCount(offer.qtyOnHand)} on Hand
+          </PillAction>
+        )}
+      </Pill>,
+    );
+  }
+  for (const warning of view.quantityWarnings) {
+    pills.push(
+      line.quantityConfirmed ? (
+        <Pill key={warning.code} tone="neutral" icon={<Check />} title={warning.message}>
+          Quantity confirmed
+        </Pill>
+      ) : (
+        <Pill key={warning.code} tone="warning" icon={<TriangleAlert />}>
+          {warning.message}
+          {quantityIssue === "unconfirmed" && quantity !== null && (
+            <PillAction onClick={() => dispatch({ type: "confirmQuantity", key })}>
+              Confirm {formatCount(quantity)}
+            </PillAction>
           )}
-        </Callout>
-      )}
-
-      {view.quantityWarnings.map((warning) =>
-        line.quantityConfirmed ? (
-          <Note key={warning.code} icon={<Check aria-hidden className="size-3.5 text-neutral-500" />}>
-            Quantity confirmed. {warning.message}
-          </Note>
-        ) : (
-          <Callout key={warning.code}>
-            {warning.message}
-            {quantityIssue === "unconfirmed" && quantity !== null && (
-              <CalloutButton onClick={() => dispatch({ type: "confirmQuantity", key })}>
-                Confirm {formatCount(quantity)}
-              </CalloutButton>
-            )}
-          </Callout>
-        ),
-      )}
-
-      {view.otherWarnings.map((warning) =>
-        warning.code === "UNIT_CONVERTED" ? (
-          <Note key={warning.code} icon={<Info aria-hidden className="size-3.5 text-neutral-400" />}>
-            {warning.message}
-          </Note>
-        ) : (
-          <Callout key={warning.code}>{warning.message}</Callout>
-        ),
-      )}
-    </>
-  );
+        </Pill>
+      ),
+    );
+  }
+  for (const warning of view.otherWarnings) {
+    pills.push(
+      warning.code === "UNIT_CONVERTED" ? (
+        <Pill key={warning.code} tone="neutral" icon={<Info />}>
+          {warning.message}
+        </Pill>
+      ) : (
+        <Pill key={warning.code} tone="warning" icon={<TriangleAlert />}>
+          {warning.message}
+        </Pill>
+      ),
+    );
+  }
+  return pills;
 }
 
-function Callout({ children }: { children: ReactNode }) {
+const pillTones = {
+  warning: "border-warning-border bg-warning-surface text-warning-foreground [&>svg]:text-warning",
+  error: "border-destructive/30 bg-destructive/8 text-destructive",
+  neutral: "border-border bg-muted text-muted-foreground",
+};
+
+function Pill({
+  tone,
+  icon,
+  title,
+  children,
+}: {
+  tone: keyof typeof pillTones;
+  icon: ReactNode;
+  title?: string;
+  children: ReactNode;
+}) {
   return (
-    <div className="flex items-start gap-1.5 rounded-md bg-amber-50 px-2 py-1 text-xs leading-5 text-amber-900 ring-1 ring-amber-600/20 ring-inset">
-      <TriangleAlert aria-hidden className="mt-[3px] size-3.5 shrink-0 text-amber-600" />
-      <p className="min-w-0 flex-1">{children}</p>
-    </div>
+    <span
+      title={title}
+      className={cn(
+        "inline-flex min-h-6 max-w-full items-center gap-1.5 rounded-full border py-0.5 pr-1 pl-2 text-footnote [&>svg]:size-3.5 [&>svg]:shrink-0",
+        tone === "neutral" && "pr-2.5",
+        pillTones[tone],
+      )}
+    >
+      {icon}
+      <span className="min-w-0">{children}</span>
+    </span>
   );
 }
 
-function CalloutButton({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+function PillAction({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="ml-2 inline-flex h-5 items-center rounded border border-amber-300 bg-white px-1.5 align-baseline text-xs font-medium text-amber-900 hover:bg-amber-100 focus-visible:ring-2 focus-visible:ring-amber-400/50 focus-visible:outline-none"
+      className="ml-1.5 inline-flex h-5 items-center rounded-full bg-background px-2 align-middle text-footnote font-medium text-foreground shadow-xs ring-1 ring-warning-border hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/45 focus-visible:outline-none"
     >
       {children}
     </button>
   );
 }
 
-function Note({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+function LineMenu({
+  number,
+  partOptionsOpen,
+  canHideOptions,
+  hasCandidates,
+  onToggleOptions,
+  onRemove,
+}: {
+  number: number;
+  partOptionsOpen: boolean;
+  canHideOptions: boolean;
+  hasCandidates: boolean;
+  onToggleOptions: () => void;
+  onRemove: () => void;
+}) {
+  const itemClass =
+    "flex h-6 cursor-default items-center rounded-[5px] px-2.5 text-body outline-none select-none data-highlighted:bg-primary data-highlighted:text-primary-foreground";
   return (
-    <div className="flex items-start gap-1.5 px-0.5 text-xs leading-5 text-neutral-500">
-      <span className="mt-[3px] shrink-0">{icon}</span>
-      <p className="min-w-0">{children}</p>
-    </div>
+    <Menu.Root>
+      <Menu.Trigger
+        aria-label={`Actions for line ${number}`}
+        className="grid size-6 place-items-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/45 data-popup-open:bg-accent"
+      >
+        <Ellipsis aria-hidden className="size-4" />
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner side="bottom" align="end" sideOffset={4} className="z-50">
+          <Menu.Popup className="min-w-44 origin-[var(--transform-origin)] rounded-lg bg-popover p-1 text-popover-foreground shadow-float outline-none transition-[opacity,scale] duration-100 data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0">
+            {(!partOptionsOpen || canHideOptions) && (
+              <Menu.Item className={itemClass} onClick={onToggleOptions}>
+                {partOptionsOpen ? "Hide Part Options" : hasCandidates ? "Change Part…" : "Find a Part…"}
+              </Menu.Item>
+            )}
+            <Menu.Item className={itemClass} onClick={onRemove}>
+              Remove Line
+            </Menu.Item>
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
   );
 }

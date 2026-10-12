@@ -246,6 +246,13 @@ export function reviewReducer(state: ReviewState, action: ReviewAction): ReviewS
 /** Why a line can't be saved yet, beyond needing a part decision. */
 export type QuantityIssue = "missing" | "unconfirmed" | null;
 
+/**
+ * Where a line stands, for the filter on the review screen: something left to do before
+ * Save, nothing left and priced, or nothing left and quoted without a price.
+ */
+export type LineStatus = "attention" | "ready" | "unmatched";
+export type LineFilter = "all" | LineStatus;
+
 export type LineView = {
   line: ReviewLine;
   /** 1-based position on screen and in the saved draft. */
@@ -263,6 +270,7 @@ export type LineView = {
   otherWarnings: LineWarning[];
   quantityIssue: QuantityIssue;
   needsChoice: boolean;
+  status: LineStatus;
   /** Differs from what extraction and matching produced (SAVE-4). Hand-added lines always count. */
   edited: boolean;
 };
@@ -299,8 +307,29 @@ export function viewLine(line: ReviewLine, index: number, markupBps: number): Li
     otherWarnings: warnings.filter((w) => !QUANTITY_CHECK_CODES.has(w.code)),
     quantityIssue,
     needsChoice: line.selection === null,
+    status:
+      line.selection === null || quantityIssue !== null
+        ? "attention"
+        : line.selection.kind === "unmatched"
+          ? "unmatched"
+          : "ready",
     edited,
   };
+}
+
+/** The control that answers what a line is waiting on: its part choice, or its quantity. */
+export type BlockedTarget = { key: string; target: "choice" | "quantity" };
+
+/**
+ * The next line with something left to do after `afterKey`, wrapping around, so "Next"
+ * walks the rep through every blocker in screen order.
+ */
+export function nextBlocked(views: LineView[], afterKey: string | null): BlockedTarget | null {
+  const blocked = views.filter((view) => view.status === "attention");
+  if (blocked.length === 0) return null;
+  const after = views.findIndex((view) => view.line.key === afterKey);
+  const next = blocked.find((view) => view.number - 1 > after) ?? blocked[0];
+  return { key: next.line.key, target: next.needsChoice ? "choice" : "quantity" };
 }
 
 export type ReviewSummary = {

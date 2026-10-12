@@ -13,8 +13,8 @@ type Props = {
 };
 
 const optionClass =
-  "flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 hover:bg-white has-checked:bg-white has-checked:ring-1 has-checked:ring-neutral-300";
-const radioClass = "mt-[3px] size-3.5 shrink-0 accent-neutral-900";
+  "flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 hover:bg-hover has-checked:bg-selection";
+const radioClass = "mt-[3px] size-3.5 shrink-0 accent-primary";
 
 /**
  * The part decision for one line (REV-3, REV-6): matching's candidates best first, "Keep
@@ -45,7 +45,7 @@ export function PartPicker({ view, markupBps, onPick, onKeepUnmatched }: Props) 
   }
 
   return (
-    <fieldset id={`line-${line.key}-choice`} className="space-y-1.5 rounded-lg border border-neutral-200 bg-neutral-50 p-1.5">
+    <fieldset id={`line-${line.key}-choice`} className="space-y-1.5 rounded-lg border border-border bg-card p-1.5 shadow-xs">
       <legend className="sr-only">Part for line {number}</legend>
       <div className="space-y-0.5">
         {line.candidates.map((candidate) => (
@@ -73,8 +73,8 @@ export function PartPicker({ view, markupBps, onPick, onKeepUnmatched }: Props) 
             onChange={onKeepUnmatched}
             className={radioClass}
           />
-          <span className="text-[13px] text-neutral-900">
-            Keep unmatched <span className="text-xs text-neutral-500">· quoted without a price</span>
+          <span className="text-body">
+            Keep unmatched <span className="text-footnote text-muted-foreground">· quoted without a price</span>
           </span>
         </label>
       </div>

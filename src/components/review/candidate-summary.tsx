@@ -12,16 +12,16 @@ export function CandidateSummary({ candidate, markupBps }: { candidate: Candidat
   return (
     <div className="flex min-w-0 items-start gap-3">
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] break-words text-neutral-900">
+        <p className="text-body break-words">
           <span className="font-mono font-semibold">{candidate.partNumber}</span>{" "}
-          <span className="text-neutral-600">{candidate.description}</span>
+          <span className="text-muted-foreground">{candidate.description}</span>
         </p>
-        <p className="text-xs text-neutral-500">
+        <p className="text-footnote text-muted-foreground">
           {candidate.reason}
           {candidate.nsn && <span className="whitespace-nowrap"> · NSN {candidate.nsn}</span>}
         </p>
       </div>
-      <p className="shrink-0 text-right text-xs text-neutral-500 tabular-nums">
+      <p className="shrink-0 text-right text-footnote text-muted-foreground tabular-nums">
         {plural(candidate.offers.length, "supplier", "suppliers")} · up to {formatCount(mostOnHand)} on hand
         <br />
         from {formatCents(unitPriceCents(lowestCost, markupBps))}
