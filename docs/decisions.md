@@ -217,7 +217,8 @@ A rep works in this app all day, so they need to see where they are and reach an
 A sidebar (source list) holds New Quote, Drafts with a count, and the most recent drafts named by customer or subject, with date and total.
 Above each page's content, a toolbar shows where you are on the leading edge and that page's actions on the trailing edge.
 One vocabulary everywhere: New Quote, Drafts, Draft, Save Draft.
-The look comes from theme tokens in `globals.css` (system font, macOS system colors, hairline separators), and dark mode follows the system setting.
+The look comes from theme tokens in `globals.css` (Inter, macOS system colors, hairline separators), and dark mode follows the system setting.
+Inter is self-hosted through `next/font`, so it looks the same on every machine; it is close to SF Pro, which Apple's license doesn't let us host.
 Drafts are labeled from their extraction's email (From and Subject lines, else the first line), derived on the server with no schema change.
 
 **Alternatives:** A top navigation bar (the web convention, but it competes with the toolbar for the row that holds Save Draft, and it has no room for recent drafts); per-page headers with more links (each page reinvents navigation); an inspector pane for Low lines on the review screen instead of inline candidates.

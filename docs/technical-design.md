@@ -444,7 +444,7 @@ The reason string says which rule picked it.
   Exactly one row is selected: New Quote on the paste and review pages, Drafts on the list, and the open draft on its page.
   Each page has a toolbar: where you are on the leading edge, that page's actions on the trailing edge.
   The sidebar's drafts are read per request and refreshed after a save, and a failed read leaves navigation working.
-- **Look.** Theme tokens in `src/app/globals.css`: the system font stack (SF Pro on a Mac, never self-hosted), macOS system colors with one accent (systemBlue) for primary actions, selection, and focus, hairline separators, and soft shadows only on what floats.
+- **Look.** Theme tokens in `src/app/globals.css`: Inter (self-hosted by `next/font`, close to SF Pro, with the system font as the fallback), macOS system colors with one accent (systemBlue) for primary actions, selection, and focus, hairline separators, and soft shadows only on what floats.
   Dark mode follows `prefers-color-scheme`.
   Components use tokens, never one-off colors, and `cn` in `src/lib/utils.ts` knows the app's type scale so merged classes keep their size.
 - **Paste page.** A compose card: a header with a one-line explanation and Extract (⌘↩), a text box that grows with the email, and a character counter.
