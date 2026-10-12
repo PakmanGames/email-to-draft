@@ -13,3 +13,8 @@ export function formatCents(cents: number): string {
 export function formatMarkup(bps: number): string {
   return percent.format(bps / 10_000);
 }
+
+/** What a draft is called everywhere: its customer, else its subject (both from the email). */
+export function draftTitle({ customer, subject }: { customer: string | null; subject: string | null }): string {
+  return customer ?? subject ?? "Untitled draft";
+}
